@@ -80,7 +80,7 @@ a{color:var(--accent)}
 <div class="fact"><b>36</b><span>values found</span></div>
 <div class="fact"><b>5</b><span>named NME fields</span></div>
 <div class="fact"><b>26</b><span>registry lines</span></div>
-<div class="fact"><b>6</b><span>need a decision</span></div>
+<div class="fact"><b>7</b><span>need a decision</span></div>
 </div></header>
 <nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#coverage">Coverage</a><a href="#extras">Groups &amp; files</a></nav>
 <h2 id="howto">How to rebuild this in Nerdio Manager</h2>
@@ -202,8 +202,9 @@ a{color:var(--accent)}
 <div class="finding warn"><b>Profile Container\SizeInMBs is set twice, with different values</b><p>The product key says &quot;30000&quot;, the Policies key says &quot;50000&quot;. Only one of them is what the environment actually runs on -- settle that before rebuilding the profile in Nerdio Manager, otherwise the value you type there is the one that loses.</p></div>
 <div class="finding warn"><b>Group Policy on this host mentions FSLogix</b><p>1 policy file(s) under %WINDIR%\System32\GroupPolicy reference FSLogix: C:\Windows\System32\GroupPolicy\Machine\registry.pol. FSLogix's own ADMX writes into the same registry keys the product uses, so a GPO-set value looks exactly like a locally set one -- and it wins after every policy refresh. The help centre is explicit: session hosts should not receive conflicting FSLogix configurations from GPOs.</p></div>
 <div class="finding warn"><b>Could not read: Group Policy files</b><p>2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here (C:\Windows\System32\GroupPolicy). Whatever this would have shown is missing from the report -- absent and unreadable look the same everywhere else, so treat this part as unknown rather than empty. This run was not elevated; an elevated run may get further.</p></div>
+<div class="finding warn"><b>Could not read: Applied GPO list</b><p>gpresult exited with 1: INFO: The user does not have RSOP data. Computer-scope policy data normally needs an elevated run. (gpresult.exe). Whatever this would have shown is missing from the report -- absent and unreadable look the same everywhere else, so treat this part as unknown rather than empty. This run was not elevated; an elevated run may get further.</p></div>
 <div class="finding warn"><b>&quot;FSLogix Profile Include List&quot; is narrowed to 1 member(s)</b><p>Members: FIN\AVD-Users -- and not Everyone, so FSLogix applies to those members only. Nerdio Manager does not manage include-list membership; reproduce it with a scripted action, or the containers will apply to everyone in the new environment.</p></div>
-<div class="finding warn"><b>Path not reachable from this host: \\fin-fs01\fslogix$\profiles</b><p>Configured as Profiles\VHDLocations. Checked from this session host at capture time; it may still be correct for the target environment.</p></div>
+<div class="finding warn"><b>Path not reachable from this host: \\fin-fs01\fslogix$\profiles</b><p>Configured as Profiles\VHDLocations: \\fin-fs01\fslogix$\profiles -- no answer on SMB (TCP 445) from fin-fs01 within 3 seconds. Checked from this session host with the rights of whoever ran this, at capture time; it may still be correct for the target environment.</p></div>
 <div class="finding unmanaged"><b>3 App Masking rule file(s) on this host</b><p>Nerdio Manager configures the FSLogix profile and Office containers; App Masking rule sets are not part of that configuration. Carry them over with a scripted action or your image build. Files: SAP-GUI.fxa, SAP-GUI.fxr, Visio.fxr</p></div>
 <div class="finding info"><b>Profiles\VolumeWaitTimeMs cannot be typed into the Advanced editor</b><p>The value is of type QWord. Enter it under &quot;All settings&quot;, or reproduce it with a scripted action. Current value: 20000</p></div>
 <div class="finding info"><b>redirections.xml is in use</b><p>The host reads its redirections from \\fin-fs01\fslogix$\config\redirections.xml. In Nerdio Manager this becomes the &quot;Redirections&quot; toggle on the FSLogix profile; the file content is reproduced at the end of this report so it can be pasted there.</p></div>
@@ -212,12 +213,12 @@ a{color:var(--accent)}
 </div>
 <h2 id="coverage">Coverage</h2>
 <div class="card">
-<p class="lead"><b>1 of 17 collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>
+<p class="lead"><b>2 of 18 collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>
 <table><thead><tr><th style="width:34%">Collector</th><th style="width:12%">Result</th><th>Detail</th></tr></thead><tbody>
+<tr class="policy"><td>Applied GPO list</td><td><span class="tag tag-registry">denied</span></td><td>gpresult exited with 1: INFO: The user does not have RSOP data. Computer-scope policy data normally needs an elevated run.<span class="note">gpresult.exe</span></td></tr>
 <tr class="policy"><td>Group Policy files</td><td><span class="tag tag-registry">denied</span></td><td>2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here<span class="note">C:\Windows\System32\GroupPolicy</span></td></tr>
 <tr><td>Group &quot;FSLogix ODFC Exclude List&quot;</td><td><span class="tag tag-registry">empty</span></td><td>0 member(s)<span class="note">local groups</span></td></tr>
 <tr><td>Registry HKLM\SOFTWARE\Policies\FSLogix\ODFC (policy)</td><td><span class="tag tag-registry">absent</span></td><td>key does not exist on this host<span class="note">HKLM\SOFTWARE\Policies\FSLogix\ODFC</span></td></tr>
-<tr><td>Applied GPO list</td><td><span class="tag tag-registry">skipped</span></td><td>not requested (-IncludeGpResult)<span class="note">gpresult.exe</span></td></tr>
 <tr><td>App Masking rules</td><td><span class="tag tag-registry">ok</span></td><td>3 file(s)<span class="note">C:\Program Files\FSLogix\Apps\Rules</span></td></tr>
 <tr><td>FSLogix agent version</td><td><span class="tag tag-registry">ok</span></td><td>2.9.8884.27471<span class="note">C:\Program Files\FSLogix\Apps\frxsvc.exe</span></td></tr>
 <tr><td>FSLogix services</td><td><span class="tag tag-registry">ok</span></td><td>3 of 4 present<span class="note">service control manager</span></td></tr>
@@ -225,6 +226,7 @@ a{color:var(--accent)}
 <tr><td>Group &quot;FSLogix Profile Exclude List&quot;</td><td><span class="tag tag-registry">ok</span></td><td>2 member(s)<span class="note">local groups</span></td></tr>
 <tr><td>Group &quot;FSLogix Profile Include List&quot;</td><td><span class="tag tag-registry">ok</span></td><td>1 member(s)<span class="note">local groups</span></td></tr>
 <tr><td>Join state</td><td><span class="tag tag-registry">ok</span></td><td>dsregcmd /status<span class="note">dsregcmd.exe</span></td></tr>
+<tr><td>Path reachability</td><td><span class="tag tag-registry">ok</span></td><td>3 path(s) probed, 1 unreachable<span class="note">profile paths</span></td></tr>
 <tr><td>redirections.xml</td><td><span class="tag tag-registry">ok</span></td><td>412 characters<span class="note">\\fin-fs01\fslogix$\config\redirections.xml</span></td></tr>
 <tr><td>Registry HKLM\SOFTWARE\FSLogix\Apps (product)</td><td><span class="tag tag-registry">ok</span></td><td>3 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\Apps</span></td></tr>
 <tr><td>Registry HKLM\SOFTWARE\FSLogix\Logging (product)</td><td><span class="tag tag-registry">ok</span></td><td>3 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\Logging</span></td></tr>

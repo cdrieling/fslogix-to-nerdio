@@ -129,9 +129,9 @@
   ],
   "policyScan": { "scanned": 2, "unreadable": 0, "hits": 1, "error": null },
   "pathTests": [
-    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\profiles", "reachable": true },
-    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\fin-fs01\\fslogix$\\profiles", "reachable": false },
-    { "area": "ODFC", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\odfc", "reachable": true }
+    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\profiles\\%username%", "tested": "\\\\finstorage01.file.core.windows.net\\profiles", "reachable": true, "note": "the configured path holds an FSLogix variable, so the share itself was probed" },
+    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\fin-fs01\\fslogix$\\profiles", "tested": "\\\\fin-fs01\\fslogix$\\profiles", "reachable": false, "note": "no answer on SMB (TCP 445) from fin-fs01 within 3 seconds" },
+    { "area": "ODFC", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\odfc", "tested": "\\\\finstorage01.file.core.windows.net\\odfc", "reachable": true, "note": null }
   ],
   "gpResult": null,
   "collectors": [
@@ -151,6 +151,7 @@
     { "name": "redirections.xml", "status": "ok", "detail": "412 characters", "source": "\\\\fin-fs01\\fslogix$\\config\\redirections.xml" },
     { "name": "App Masking rules", "status": "ok", "detail": "3 file(s)", "source": "C:\\Program Files\\FSLogix\\Apps\\Rules" },
     { "name": "Group Policy files", "status": "denied", "detail": "2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here", "source": "C:\\Windows\\System32\\GroupPolicy" },
-    { "name": "Applied GPO list", "status": "skipped", "detail": "not requested (-IncludeGpResult)", "source": "gpresult.exe" }
+    { "name": "Path reachability", "status": "ok", "detail": "3 path(s) probed, 1 unreachable", "source": "profile paths" },
+    { "name": "Applied GPO list", "status": "denied", "detail": "gpresult exited with 1: INFO: The user does not have RSOP data. Computer-scope policy data normally needs an elevated run.", "source": "gpresult.exe" }
   ]
 }

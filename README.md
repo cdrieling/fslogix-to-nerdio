@@ -67,9 +67,17 @@ session hosts should not receive conflicting FSLogix configurations from GPOs.
 | `-SaveJson <file>` | also write the raw capture, to render elsewhere or diff two hosts |
 | `-FromJson <file>` | render from such a capture instead of reading the registry — works on any OS |
 | `-CatalogPath <file>` | override the annotation catalogue, see [docs/catalog.md](docs/catalog.md) |
-| `-TestPaths` | probe the profile paths with `Test-Path` (off by default: a dead UNC path blocks) |
-| `-IncludeGpResult` | add the applied GPO list from `gpresult /scope computer /r` |
+| `-TestPaths` | probe the profile and Office container shares (see below) |
+| `-IncludeGpResult` | add the applied GPO list from `gpresult /scope computer /r` — computer-scope policy data normally needs an **elevated** run; when it is refused, the report says so instead of leaving the section out |
 | `-NoLaunch` | do not open the report when it is done |
+
+**What `-TestPaths` actually probes.** A profile path usually ends in an FSLogix variable
+(`\\server\share\%username%`), and nothing expands that outside a sign-in — so the literal
+string names a folder that cannot exist. The path is cut before the first `%` and the
+**share** is probed instead, which is the part a report can say anything useful about. Each
+UNC host is asked on TCP 445 first with a 3-second timeout, and the `Test-Path` behind it is
+capped at 15 seconds: an unreachable share used to make this switch look like a hang, because
+SMB retries for minutes before giving up.
 
 Capture on the host, read the report anywhere:
 

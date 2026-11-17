@@ -308,6 +308,54 @@ function Get-ErrorKind {
     return 'error'
 }
 
+function Get-TestablePath {
+    # FSLogix expands %username%, %sid% and the rest when a user signs in. Nothing expands
+    # them here, so probing the literal string probes a folder that cannot exist. Cut the
+    # path before the first variable and probe what is left -- which is the share, and the
+    # only part of this that a report can sensibly say anything about.
+    param([string] $Path)
+    $p = [string] $Path
+    $i = $p.IndexOf('%')
+    if ($i -ge 0) { $p = $p.Substring(0, $i) }
+    return $p.TrimEnd('\')
+}
+
+function Test-SmbHostReachable {
+    # A dead or filtered SMB host makes Test-Path sit there for minutes. Ask TCP 445 first,
+    # with a timeout we choose, and only then touch the file system.
+    param([string] $HostName, [int] $TimeoutMs = 3000)
+    $client = $null
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect($HostName, 445, $null, $null)
+        if (-not $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)) { return $false }
+        $client.EndConnect($iar)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($client) { try { $client.Close() } catch { } }
+    }
+}
+
+function Test-PathBounded {
+    # Test-Path with a wall clock on it. A job costs about a second; an unreachable share
+    # costs minutes, which is what made this switch look like a hang.
+    param([string] $Path, [int] $TimeoutSeconds = 15)
+    $job = $null
+    try {
+        $job = Start-Job -ScriptBlock { param($p) Test-Path -LiteralPath $p } -ArgumentList $Path
+        if (Wait-Job -Job $job -Timeout $TimeoutSeconds) {
+            return [pscustomobject] @{ reachable = [bool] (Receive-Job -Job $job); timedOut = $false }
+        }
+        return [pscustomobject] @{ reachable = $false; timedOut = $true }
+    } catch {
+        return [pscustomobject] @{ reachable = $false; timedOut = $false }
+    } finally {
+        if ($job) { try { Remove-Job -Job $job -Force } catch { } }
+    }
+}
+
 function Test-IsElevated {
     try {
         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -603,25 +651,67 @@ function Get-Capture {
 
     $pathTests = @()
     if ($WithPathTests) {
+        $seen = @{}
         foreach ($k in $keys) {
             foreach ($v in (ConvertTo-Array $k.values)) {
                 if ($v.name -notin @('VHDLocations','CCDLocations')) { continue }
                 foreach ($p in (([string] $v.display) -split "[`n;,]")) {
                     $p = $p.Trim()
                     if (-not $p) { continue }
-                    $probe = $p
-                    if ($probe -match '^type=') { continue }   # Cloud Cache provider strings
-                    $ok = $false
-                    try { $ok = Test-Path -LiteralPath $probe -ErrorAction Stop } catch { }
-                    $pathTests += [pscustomobject] [ordered]@{ area = $k.area; value = $v.name; path = $p; reachable = $ok }
+                    if ($p -match '^type=') { continue }   # Cloud Cache provider strings
+                    $probe = Get-TestablePath $p
+                    if (-not $probe) { continue }
+                    if ($seen.ContainsKey($probe.ToLowerInvariant())) { continue }
+                    $seen[$probe.ToLowerInvariant()] = $true
+
+                    Write-Verbose ("Probing {0}" -f $probe)
+                    $note = $null
+                    if ($probe -ne $p.TrimEnd('\')) { $note = 'the configured path holds an FSLogix variable, so the share itself was probed' }
+
+                    # An unreachable SMB host is the one case that used to take minutes.
+                    if ($probe -match '^\\\\([^\\]+)\\') {
+                        if (-not (Test-SmbHostReachable -HostName $Matches[1])) {
+                            $pathTests += [pscustomobject] [ordered]@{ area = $k.area; value = $v.name; path = $p; tested = $probe; reachable = $false; note = ('no answer on SMB (TCP 445) from {0} within 3 seconds' -f $Matches[1]) }
+                            continue
+                        }
+                    }
+                    $res = Test-PathBounded -Path $probe
+                    if ($res.timedOut) { $note = 'the check was still waiting after 15 seconds and was given up' }
+                    $pathTests += [pscustomobject] [ordered]@{ area = $k.area; value = $v.name; path = $p; tested = $probe; reachable = $res.reachable; note = $note }
                 }
             }
         }
+        $bad = @($pathTests | Where-Object { -not $_.reachable }).Count
+        Add-CollectorStatus -Name 'Path reachability' -Status $(if ($pathTests.Count -eq 0) { 'empty' } else { 'ok' }) `
+            -Detail ('{0} path(s) probed, {1} unreachable' -f $pathTests.Count, $bad) -Source 'profile paths'
     }
 
     $gpResult = $null
     if ($WithGpResult) {
-        try { $gpResult = (& gpresult.exe /scope computer /r 2>$null) -join "`n" } catch { }
+        Write-Verbose 'Running gpresult'
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $raw  = & gpresult.exe /scope computer /r 2>&1
+            $code = $LASTEXITCODE
+            $text = ($raw | Out-String)
+            # Computer-scope RSoP normally needs an elevated run. Before this, it failed into
+            # silence and the report simply had no GPO section -- which reads like "no GPOs".
+            if ($code -ne 0 -or $text -match 'does not have RSOP data|Access is denied|Zugriff verweigert') {
+                $first = (($text -split "`n") | Where-Object { $_.Trim() } | Select-Object -First 1)
+                Add-CollectorStatus -Name 'Applied GPO list' -Status 'denied' `
+                    -Detail ('gpresult exited with {0}: {1} Computer-scope policy data normally needs an elevated run.' -f $code, ([string] $first).Trim()) -Source 'gpresult.exe'
+            } elseif ([string]::IsNullOrWhiteSpace($text)) {
+                Add-CollectorStatus -Name 'Applied GPO list' -Status 'empty' -Detail 'gpresult produced no output' -Source 'gpresult.exe'
+            } else {
+                $gpResult = $text
+                Add-CollectorStatus -Name 'Applied GPO list' -Status 'ok' -Detail ('{0} characters' -f $text.Length) -Source 'gpresult.exe'
+            }
+        } catch {
+            Add-CollectorStatus -Name 'Applied GPO list' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source 'gpresult.exe'
+        } finally {
+            $ErrorActionPreference = $prev
+        }
     }
 
     $os = $null
@@ -893,12 +983,18 @@ function Build-Model {
     }
 
     foreach ($t in (ConvertTo-Array $Capture.pathTests)) {
-        if (-not $t.reachable) {
-            $findings += [pscustomobject] @{
-                severity = 'warn'
-                title    = ('Path not reachable from this host: {0}' -f $t.path)
-                body     = ('Configured as {0}\{1}. Checked from this session host at capture time; it may still be correct for the target environment.' -f $t.area, $t.value)
-            }
+        if ($t.reachable) { continue }
+        $tested = [string] (Get-Prop $t 'tested')
+        if (-not $tested) { $tested = [string] $t.path }
+        $body = ('Configured as {0}\{1}: {2}' -f $t.area, $t.value, $t.path)
+        if ($tested -ne [string] $t.path) { $body += ('. Probed: {0}' -f $tested) }
+        $tNote = [string] (Get-Prop $t 'note')
+        if ($tNote) { $body += (' -- {0}' -f $tNote) }
+        $body += '. Checked from this session host with the rights of whoever ran this, at capture time; it may still be correct for the target environment.'
+        $findings += [pscustomobject] @{
+            severity = 'warn'
+            title    = ('Path not reachable from this host: {0}' -f $tested)
+            body     = $body
         }
     }
 
@@ -1292,13 +1388,26 @@ if ($FromJson) {
     if (-not (Test-IsWindows)) {
         throw 'Collecting needs Windows. On another operating system, render an existing capture with -FromJson.'
     }
+    Write-Host 'Reading the FSLogix configuration of this host...'
+    if ($TestPaths)       { Write-Host '  -TestPaths: profile shares are probed, which can take a few seconds each.' }
+    if ($IncludeGpResult) { Write-Host '  -IncludeGpResult: gpresult is run, which can take several seconds.' }
     $capture = Get-Capture -WithPathTests:$TestPaths -WithGpResult:$IncludeGpResult
+    Write-Host ('Collected {0} source(s).' -f @($capture.collectors).Count)
 }
 
 if ($SaveJson) {
-    $capture | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $SaveJson -Encoding UTF8
+    # Serialise first, then write in one call: a failure then says which of the two broke,
+    # instead of a pipeline that stops halfway with a half-written file.
+    Write-Host 'Writing the capture...'
+    $json = $capture | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText(
+        ([System.IO.Path]::GetFullPath([System.IO.Path]::Combine((Get-Location).Path, $SaveJson))),
+        $json,
+        (New-Object System.Text.UTF8Encoding($false)))
     Write-Host ("Capture written to {0}" -f $SaveJson)
 }
+
+Write-Host 'Building the report...'
 
 $model = Build-Model -Capture $capture -Catalog $catalog
 $html  = New-HtmlReport -Capture $capture -Model $model
