@@ -10,6 +10,12 @@ usually from a host nobody fully documented.
 
 > A personal project, not a Nerdio product — see [Disclaimer](#disclaimer).
 
+![The report: what the host has, and what each value becomes in Nerdio Manager](docs/report.png)
+
+*The report from [`samples/sample-capture.json`](samples/sample-capture.json) — open
+[`samples/sample-report.html`](samples/sample-report.html) in a browser for the whole thing,
+including the paste blocks and the findings.*
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Export-FSLogixConfig.ps1
 ```
@@ -172,6 +178,20 @@ Field names and navigation paths come from the Nerdio help centre:
 · [FSLogix per-host pool customization](https://nmehelp.getnerdio.com/hc/en-us/articles/26124330262925-FSLogix-per-host-pool-customization)
 · [FSLogix and User Profile Management](https://nmehelp.getnerdio.com/hc/en-us/articles/26126637566477-FSLogix-and-User-Profile-Management).
 Verify them against your own NME version; the UI moves.
+
+## Contributing
+
+Issues and pull requests are welcome, and two kinds are especially useful:
+
+- **Catalogue entries** for settings the report currently carries without a note. Each one is a
+  few lines of data in `Get-BuiltInCatalog` — the NME control or editor it belongs to, one
+  sentence of what it decides, the enum values where it has them. See
+  [docs/catalog.md](docs/catalog.md).
+- **Corrections when the Nerdio Manager UI moves** — a renamed field, a changed navigation
+  path. Those age silently and are the part a single author cannot keep current alone.
+
+Run the report against `samples/sample-capture.json` before and after a change; it carries the
+awkward cases on purpose, so a diff of the two reports shows what you actually moved.
 
 ## Disclaimer
 
