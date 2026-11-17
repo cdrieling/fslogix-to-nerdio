@@ -71,7 +71,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script:SchemaVersion  = 'fslogix-to-nerdio/1'
-$script:ToolVersion    = '1.1.0'
+$script:ToolVersion    = '1.1.1'
 
 # What each collector managed to do. The point of this list is that "not found" and "not
 # allowed to look" must never render the same way -- especially when the script runs as an
@@ -289,6 +289,102 @@ function Protect-Html {
     $t = $t -replace '>', '&gt;'
     $t = $t -replace '"', '&quot;'
     return $t
+}
+
+function Write-JsonValue {
+    # Windows PowerShell 5.1's ConvertTo-Json is the one component here with a reputation for
+    # going away and not coming back on perfectly ordinary objects. The capture's shape is
+    # fully ours -- strings, numbers, booleans, nulls, arrays and property bags -- so it is
+    # cheaper to write the twenty lines than to debug someone else's serialiser on a host we
+    # do not have. This also makes the output identical on 5.1 and 7.x.
+    param([System.Text.StringBuilder] $Sb, $Value, [int] $Indent)
+
+    $pad  = ' ' * ($Indent * 2)
+    $pad2 = ' ' * (($Indent + 1) * 2)
+
+    if ($null -eq $Value) { [void] $Sb.Append('null'); return }
+
+    if ($Value -is [bool])     { [void] $Sb.Append($(if ($Value) { 'true' } else { 'false' })); return }
+    if ($Value -is [string])   { [void] $Sb.Append((ConvertTo-JsonString $Value)); return }
+    if ($Value -is [datetime]) { [void] $Sb.Append((ConvertTo-JsonString ($Value.ToString('yyyy-MM-ddTHH:mm:sszzz')))); return }
+
+    if ($Value -is [int] -or $Value -is [long] -or $Value -is [int16] -or $Value -is [byte] -or
+        $Value -is [uint16] -or $Value -is [uint32] -or $Value -is [uint64] -or
+        $Value -is [double] -or $Value -is [single] -or $Value -is [decimal]) {
+        [void] $Sb.Append([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}', $Value))
+        return
+    }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        $names = @($Value.Keys)
+        if ($names.Count -eq 0) { [void] $Sb.Append('{}'); return }
+        [void] $Sb.Append("{`n")
+        for ($i = 0; $i -lt $names.Count; $i++) {
+            [void] $Sb.Append($pad2).Append((ConvertTo-JsonString ([string] $names[$i]))).Append(': ')
+            Write-JsonValue -Sb $Sb -Value $Value[$names[$i]] -Indent ($Indent + 1)
+            if ($i -lt $names.Count - 1) { [void] $Sb.Append(',') }
+            [void] $Sb.Append("`n")
+        }
+        [void] $Sb.Append($pad).Append('}')
+        return
+    }
+
+    if ($Value -isnot [string] -and $Value -is [System.Collections.IEnumerable]) {
+        $items = @($Value)
+        if ($items.Count -eq 0) { [void] $Sb.Append('[]'); return }
+        [void] $Sb.Append("[`n")
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            [void] $Sb.Append($pad2)
+            Write-JsonValue -Sb $Sb -Value $items[$i] -Indent ($Indent + 1)
+            if ($i -lt $items.Count - 1) { [void] $Sb.Append(',') }
+            [void] $Sb.Append("`n")
+        }
+        [void] $Sb.Append($pad).Append(']')
+        return
+    }
+
+    $props = @($Value.PSObject.Properties | Where-Object { $_.MemberType -eq 'NoteProperty' -or $_.MemberType -eq 'Property' })
+    if ($props.Count -eq 0) { [void] $Sb.Append((ConvertTo-JsonString ([string] $Value))); return }
+    [void] $Sb.Append("{`n")
+    for ($i = 0; $i -lt $props.Count; $i++) {
+        [void] $Sb.Append($pad2).Append((ConvertTo-JsonString $props[$i].Name)).Append(': ')
+        $pv = $null
+        try { $pv = $props[$i].Value } catch { $pv = $null }
+        Write-JsonValue -Sb $Sb -Value $pv -Indent ($Indent + 1)
+        if ($i -lt $props.Count - 1) { [void] $Sb.Append(',') }
+        [void] $Sb.Append("`n")
+    }
+    [void] $Sb.Append($pad).Append('}')
+}
+
+function ConvertTo-JsonString {
+    param([string] $Text)
+    $sb = New-Object System.Text.StringBuilder
+    [void] $sb.Append('"')
+    foreach ($ch in $Text.ToCharArray()) {
+        switch ($ch) {
+            '"'      { [void] $sb.Append('\"') }
+            '\'      { [void] $sb.Append('\\') }
+            "`b"     { [void] $sb.Append('\b') }
+            "`f"     { [void] $sb.Append('\f') }
+            "`n"     { [void] $sb.Append('\n') }
+            "`r"     { [void] $sb.Append('\r') }
+            "`t"     { [void] $sb.Append('\t') }
+            default  {
+                if ([int] $ch -lt 32) { [void] $sb.Append('\u').Append(('{0:x4}' -f [int] $ch)) }
+                else                  { [void] $sb.Append($ch) }
+            }
+        }
+    }
+    [void] $sb.Append('"')
+    return $sb.ToString()
+}
+
+function ConvertTo-CaptureJson {
+    param($Value)
+    $sb = New-Object System.Text.StringBuilder
+    Write-JsonValue -Sb $sb -Value $Value -Indent 0
+    return $sb.ToString()
 }
 
 function Add-CollectorStatus {
@@ -1399,12 +1495,13 @@ if ($SaveJson) {
     # Serialise first, then write in one call: a failure then says which of the two broke,
     # instead of a pipeline that stops halfway with a half-written file.
     Write-Host 'Writing the capture...'
-    $json = $capture | ConvertTo-Json -Depth 8
-    [System.IO.File]::WriteAllText(
-        ([System.IO.Path]::GetFullPath([System.IO.Path]::Combine((Get-Location).Path, $SaveJson))),
-        $json,
-        (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host ("Capture written to {0}" -f $SaveJson)
+    Write-Verbose 'Serialising the capture'
+    $json = ConvertTo-CaptureJson -Value $capture
+    Write-Verbose ('Serialised {0} characters' -f $json.Length)
+    $jsonPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine((Get-Location).Path, $SaveJson))
+    Write-Verbose ('Writing {0}' -f $jsonPath)
+    [System.IO.File]::WriteAllText($jsonPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host ("Capture written to {0}" -f $jsonPath)
 }
 
 Write-Host 'Building the report...'
