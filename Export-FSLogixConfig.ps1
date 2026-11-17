@@ -1142,6 +1142,7 @@ function Build-Model {
         if ($valueCount -eq 0) {
             $findings += [pscustomobject] @{
                 severity = 'info'
+                rank     = 0   # the one sentence that explains the whole report; it leads
                 title    = 'This host has no FSLogix configuration'
                 body     = 'No agent under Program Files, no FSLogix registry keys, nothing to map. Either FSLogix has never been installed here, or this is not the host you meant to run it on.'
             }
@@ -1395,7 +1396,10 @@ a{color:var(--accent)}
         # The second key is not decoration: Sort-Object is not stable, so without it two
         # findings of the same severity come out in a different order on 5.1 than on 7.x,
         # and two runs of the same host stop diffing cleanly.
-        foreach ($f in ($findings | Sort-Object @{Expression={ switch ($_.severity) { 'warn' {0} 'unmanaged' {1} default {2} } }}, @{Expression={ [string] $_.title }})) {
+        foreach ($f in ($findings | Sort-Object `
+                    @{Expression={ switch ($_.severity) { 'warn' {0} 'unmanaged' {1} default {2} } }}, `
+                    @{Expression={ [int] (Get-Prop $_ 'rank' 50) }}, `
+                    @{Expression={ [string] $_.title }})) {
             Add-Line ('<div class="finding {0}"><b>{1}</b><p>{2}</p></div>' -f (Protect-Html $f.severity), (Protect-Html $f.title), (Protect-Html $f.body))
         }
         Add-Line '</div>'

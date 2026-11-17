@@ -132,18 +132,25 @@ It lives in the script so the tool stays a single file to copy onto a locked-dow
 
 ## Status
 
-v1.1.
+v1.1.3, run on two real hosts.
 
-**The collection path has run on a live host**: an AVD session host on Windows 11 Enterprise
-multi-session with FSLogix 3.26, Entra ID hybrid joined — **as an ordinary user, not
-elevated**. Everything came back: the registry keys, the agent version, the services, all four
-local groups *with their members*, `redirections.xml`, the App Masking rule files and the join
-state. Administrator rights are not needed for the report.
+| | |
+|---|---|
+| **An AVD session host** — Windows 11 Enterprise multi-session, FSLogix 3.26, Entra ID hybrid joined, English | as an ordinary **user, not elevated**: registry keys, agent version, services, all four local groups *with their members*, `redirections.xml`, App Masking rule files, join state — everything came back. Administrator rights are not needed. |
+| **A bare VM** — Windows 11 Pro, no FSLogix at all, German, workgroup | **elevated**, with `-IncludeGpResult` and `-SaveJson`: reports "this host has no FSLogix configuration" and nothing else, with no warnings and no empty sections. |
 
-That run also produced the three corrections in v1.1: the FSLogix installer's own
-`Apps\InstallPath` / `InstallVersion` are marked as install state and no longer offered for
-pasting; every collector now reports whether it was refused; and `Everyone` in an include list
-is recognised as the installer's default instead of being flagged as a narrowed scope.
+Those two runs produced most of what is in 1.1.x. The ones worth knowing, because they are
+the traps rather than the features:
+
+- **`ConvertTo-Json` on Windows PowerShell 5.1 hung** on an ordinary capture. The capture is
+  serialised by this script now, not by the shell.
+- **A missing local group read as a refusal** on a German host, because the classifier matched
+  an English message. Existence and membership are separate questions now, and "does not
+  exist" is recognised by error id and number, not by text.
+- **`gpresult /scope computer` needs elevation.** It used to fail into silence, which reads
+  like "no GPOs apply".
+- **`-TestPaths` probed `%username%` literally**, so a perfectly good share came back
+  unreachable.
 
 The rendering path is exercised against `samples/sample-capture.json`, which carries the
 awkward cases on purpose: a Policies key contradicting the product key, a `QWord` the Advanced
