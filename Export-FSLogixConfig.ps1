@@ -1095,8 +1095,18 @@ a{color:var(--accent)}
             if ($r.scope -eq 'policy') { $nme += ' <span class="tag tag-policy">from GPO</span>' }
 
             $note = ''
-            if ($r.note) { $note = Protect-Html $r.note }
-            elseif (-not $r.known) { $note = '<span class="muted">Not in the catalogue. It is carried over unchanged in the paste block below; check it against the Microsoft reference.</span>' }
+            if ($r.note) {
+                $note = Protect-Html $r.note
+            } elseif (-not $r.known) {
+                # Say what actually happened to this value, not what usually happens to one.
+                if ($r.pasteLine) {
+                    $note = '<span class="muted">Not in the catalogue. It is carried over unchanged in the paste block below; check it against the Microsoft reference.</span>'
+                } elseif ([string]::IsNullOrEmpty([string] $r.display)) {
+                    $note = '<span class="muted">Not in the catalogue, and empty on this host -- nothing to carry over.</span>'
+                } else {
+                    $note = ('<span class="muted">Not in the catalogue, and a {0} has no form in the Advanced editor -- enter it under "All settings" if it matters here.</span>' -f (Protect-Html $r.kind))
+                }
+            }
             if ($r.doc) { $note += (' <a href="{0}">docs</a>' -f $r.doc) }
 
             Add-Line ('<tr{0}><td><code>{1}</code><span class="note">{2}</span></td><td class="val">{3}</td><td>{4}</td><td>{5}</td></tr>' -f `
