@@ -80,7 +80,7 @@ a{color:var(--accent)}
 <div class="fact"><b>36</b><span>values found</span></div>
 <div class="fact"><b>5</b><span>named NME fields</span></div>
 <div class="fact"><b>26</b><span>registry lines</span></div>
-<div class="fact"><b>7</b><span>need a decision</span></div>
+<div class="fact"><b>8</b><span>need a decision</span></div>
 </div></header>
 <nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#coverage">Coverage</a><a href="#extras">Groups &amp; files</a></nav>
 <h2 id="howto">How to rebuild this in Nerdio Manager</h2>
@@ -198,6 +198,7 @@ a{color:var(--accent)}
 </div>
 <h2 id="findings">Findings</h2>
 <div class="card">
+<div class="finding warn"><b>&quot;FSLogix ODFC Exclude List&quot; exists, but its members could not be read</b><p>Access is denied. Who the containers apply to is therefore unknown in this report -- which is not the same as &quot;applies to everyone&quot;.</p></div>
 <div class="finding warn"><b>&quot;FSLogix Profile Include List&quot; is narrowed to 1 member(s)</b><p>Members: FIN\AVD-Users -- and not Everyone, so FSLogix applies to those members only. Nerdio Manager does not manage include-list membership; reproduce it with a scripted action, or the containers will apply to everyone in the new environment.</p></div>
 <div class="finding warn"><b>A Policies key exists for Profile Container</b><p>HKLM\SOFTWARE\Policies\FSLogix\Profiles is present on this host. Values there come from Group Policy or Intune and are re-applied on every policy refresh -- they will overwrite what Nerdio Manager writes. They are listed separately below; decide per value which configuration you want to keep before you paste anything.</p></div>
 <div class="finding warn"><b>Could not read: Applied GPO list</b><p>gpresult exited with 1: INFO: The user does not have RSOP data. Computer-scope policy data normally needs an elevated run. (gpresult.exe). Whatever this would have shown is missing from the report -- absent and unreadable look the same everywhere else, so treat this part as unknown rather than empty. This run was not elevated; an elevated run may get further.</p></div>
@@ -213,11 +214,11 @@ a{color:var(--accent)}
 </div>
 <h2 id="coverage">Coverage</h2>
 <div class="card">
-<p class="lead"><b>2 of 18 collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>
+<p class="lead"><b>3 of 18 collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>
 <table><thead><tr><th style="width:34%">Collector</th><th style="width:12%">Result</th><th>Detail</th></tr></thead><tbody>
 <tr class="policy"><td>Applied GPO list</td><td><span class="tag tag-registry">denied</span></td><td>gpresult exited with 1: INFO: The user does not have RSOP data. Computer-scope policy data normally needs an elevated run.<span class="note">gpresult.exe</span></td></tr>
+<tr class="policy"><td>Group &quot;FSLogix ODFC Exclude List&quot;</td><td><span class="tag tag-registry">denied</span></td><td>the group exists, but its membership could not be read: Access is denied.<span class="note">local groups</span></td></tr>
 <tr class="policy"><td>Group Policy files</td><td><span class="tag tag-registry">denied</span></td><td>2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here<span class="note">C:\Windows\System32\GroupPolicy</span></td></tr>
-<tr><td>Group &quot;FSLogix ODFC Exclude List&quot;</td><td><span class="tag tag-registry">empty</span></td><td>0 member(s)<span class="note">local groups</span></td></tr>
 <tr><td>Registry HKLM\SOFTWARE\Policies\FSLogix\ODFC (policy)</td><td><span class="tag tag-registry">absent</span></td><td>key does not exist on this host<span class="note">HKLM\SOFTWARE\Policies\FSLogix\ODFC</span></td></tr>
 <tr><td>App Masking rules</td><td><span class="tag tag-registry">ok</span></td><td>3 file(s)<span class="note">C:\Program Files\FSLogix\Apps\Rules</span></td></tr>
 <tr><td>FSLogix agent version</td><td><span class="tag tag-registry">ok</span></td><td>2.9.8884.27471<span class="note">C:\Program Files\FSLogix\Apps\frxsvc.exe</span></td></tr>
@@ -240,7 +241,7 @@ a{color:var(--accent)}
 <tr><td><code>FSLogix Profile Include List</code></td><td>FIN\AVD-Users</td></tr>
 <tr><td><code>FSLogix Profile Exclude List</code></td><td>AVD-FIN-03\Administrator, FIN\AVD-Admins</td></tr>
 <tr><td><code>FSLogix ODFC Include List</code></td><td>Everyone</td></tr>
-<tr><td><code>FSLogix ODFC Exclude List</code></td><td><span class="muted">empty</span></td></tr>
+<tr><td><code>FSLogix ODFC Exclude List</code></td><td><span class="muted">could not be read</span></td></tr>
 </tbody></table>
 </div>
 <div class="card">
@@ -270,7 +271,7 @@ a{color:var(--accent)}
 <tr><td><code>frxccds</code></td><td>Stopped</td><td>Manual</td></tr>
 <tr><td><code>frxdrv</code></td><td>Running</td><td>System</td></tr>
 </tbody></table></div>
-<footer>Generated by <b>fslogix-to-nerdio</b> 1.1.2 on 2026-11-17 10:14:03 +01:00. Read-only: nothing on this host was changed. Navigation paths and field names are taken from the Nerdio help centre; verify them against your own version. Not affiliated with, or endorsed by, Nerdio or Microsoft.</footer>
+<footer>Generated by <b>fslogix-to-nerdio</b> 1.1.3 on 2026-11-17 10:14:03 +01:00. Read-only: nothing on this host was changed. Navigation paths and field names are taken from the Nerdio help centre; verify them against your own version. Not affiliated with, or endorsed by, Nerdio or Microsoft.</footer>
 </div>
 <script>
 document.addEventListener('click', function (e) {

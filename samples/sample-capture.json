@@ -109,7 +109,7 @@
     { "name": "FSLogix Profile Include List", "exists": true, "members": ["FIN\\AVD-Users"], "memberSids": ["S-1-5-21-1004336348-1177238915-682003330-1134"], "error": null },
     { "name": "FSLogix Profile Exclude List", "exists": true, "members": ["AVD-FIN-03\\Administrator", "FIN\\AVD-Admins"], "memberSids": ["S-1-5-21-900012-500", "S-1-5-21-1004336348-1177238915-682003330-1155"], "error": null },
     { "name": "FSLogix ODFC Include List", "exists": true, "members": ["Everyone"], "memberSids": ["S-1-1-0"], "error": null },
-    { "name": "FSLogix ODFC Exclude List", "exists": true, "members": [], "memberSids": [], "error": null }
+    { "name": "FSLogix ODFC Exclude List", "exists": true, "members": [], "memberSids": [], "error": "Access is denied." }
   ],
   "redirections": {
     "folder": "\\\\fin-fs01\\fslogix$\\config",
@@ -146,7 +146,7 @@
     { "name": "Group \"FSLogix Profile Include List\"", "status": "ok", "detail": "1 member(s)", "source": "local groups" },
     { "name": "Group \"FSLogix Profile Exclude List\"", "status": "ok", "detail": "2 member(s)", "source": "local groups" },
     { "name": "Group \"FSLogix ODFC Include List\"", "status": "ok", "detail": "1 member(s)", "source": "local groups" },
-    { "name": "Group \"FSLogix ODFC Exclude List\"", "status": "empty", "detail": "0 member(s)", "source": "local groups" },
+    { "name": "Group \"FSLogix ODFC Exclude List\"", "status": "denied", "detail": "the group exists, but its membership could not be read: Access is denied.", "source": "local groups" },
     { "name": "redirections.xml", "status": "ok", "detail": "412 characters", "source": "\\\\fin-fs01\\fslogix$\\config\\redirections.xml" },
     { "name": "App Masking rules", "status": "ok", "detail": "3 file(s)", "source": "C:\\Program Files\\FSLogix\\Apps\\Rules" },
     { "name": "Group Policy files", "status": "denied", "detail": "2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here", "source": "C:\\Windows\\System32\\GroupPolicy" },

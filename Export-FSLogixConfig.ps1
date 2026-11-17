@@ -71,7 +71,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script:SchemaVersion  = 'fslogix-to-nerdio/1'
-$script:ToolVersion    = '1.1.2'
+$script:ToolVersion    = '1.1.3'
 
 # What each collector managed to do. The point of this list is that "not found" and "not
 # allowed to look" must never render the same way -- especially when the script runs as an
@@ -579,9 +579,29 @@ function Get-FSLogixGroups {
     $groups = @()
     foreach ($n in $names) {
         $entry = [ordered]@{ name = $n; exists = $false; members = @(); memberSids = @(); error = $null }
+
+        # Two separate questions, and they used to be answered by one try/catch: does the
+        # group exist, and can its membership be read. A host without FSLogix answers the
+        # first with no -- which is not a refusal, and must not be reported as one.
+        $g = $null
         try {
             $g = Get-LocalGroup -Name $n -ErrorAction Stop
-            $entry.exists = $true
+        } catch {
+            $notFound = ($_.FullyQualifiedErrorId -match 'GroupNotFound') -or
+                        ($_.Exception.GetType().Name -eq 'GroupNotFoundException') -or
+                        ([string] $_.Exception.Message -match '\b(1376|2220)\b')   # NERR_GroupNotFound, any language
+            if ($notFound) {
+                Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'absent' -Detail 'group does not exist on this host' -Source 'local groups'
+            } else {
+                $entry.error = $_.Exception.Message
+                Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'denied' -Detail $entry.error -Source 'local groups'
+            }
+            $groups += [pscustomobject] $entry
+            continue
+        }
+
+        $entry.exists = $true
+        try {
             $members = @()
             $sids = @()
             foreach ($m in (Get-LocalGroupMember -Group $g -ErrorAction Stop)) {
@@ -591,37 +611,38 @@ function Get-FSLogixGroups {
             $entry.members = $members
             $entry.memberSids = $sids
         } catch {
-            # Get-LocalGroupMember trips over orphaned or Entra-only SIDs; fall back to net.exe
+            # Get-LocalGroupMember trips over orphaned or Entra-only SIDs; net.exe does not.
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
             try {
-                $raw = & net.exe localgroup "$n" 2>$null
-                if ($LASTEXITCODE -eq 0 -and $raw) {
-                    $entry.exists = $true
+                $raw = & net.exe localgroup "$n" 2>&1
+                if ($LASTEXITCODE -eq 0) {
                     $members = @()
                     $collect = $false
-                    foreach ($line in $raw) {
+                    foreach ($line in ($raw | ForEach-Object { [string] $_ })) {
                         if ($line -match '^-{3,}') { $collect = $true; continue }
                         if (-not $collect) { continue }
-                        if ($line -match '^The command completed') { continue }
+                        if ($line -match '^The command completed|^Der Befehl wurde') { continue }
                         if ([string]::IsNullOrWhiteSpace($line)) { continue }
                         $members += $line.Trim()
                     }
                     $entry.members = $members
                 } else {
-                    $entry.error = 'group not found'
+                    $entry.error = (($raw | ForEach-Object { [string] $_ } | Where-Object { $_.Trim() } | Select-Object -First 1))
                 }
             } catch {
                 $entry.error = $_.Exception.Message
+            } finally {
+                $ErrorActionPreference = $prev
             }
         }
 
-        if ($entry.exists) {
+        if ($entry.error) {
+            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'denied' -Detail ('the group exists, but its membership could not be read: {0}' -f $entry.error) -Source 'local groups'
+        } else {
             $st = 'ok'
             if (@($entry.members).Count -eq 0) { $st = 'empty' }
             Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status $st -Detail ('{0} member(s)' -f @($entry.members).Count) -Source 'local groups'
-        } elseif ($entry.error -and $entry.error -ne 'group not found') {
-            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'denied' -Detail $entry.error -Source 'local groups'
-        } else {
-            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'absent' -Detail 'group does not exist on this host' -Source 'local groups'
         }
 
         $groups += [pscustomobject] $entry
@@ -845,7 +866,7 @@ function Get-Capture {
         keys            = $keys
         groups          = $groups
         redirections    = $redirections
-        appMaskingRules = $appMaskingRules
+        appMaskingRules = @($appMaskingRules)
         policyEvidence  = @($policyEvidence)
         policyScan      = $script:PolicyScan
         pathTests       = $pathTests
@@ -1003,6 +1024,9 @@ function Build-Model {
     # look" are the same sentence, which is the one failure this report cannot afford.
     foreach ($c in (ConvertTo-Array (Get-Prop $Capture 'collectors'))) {
         if ($c.status -ne 'denied' -and $c.status -ne 'error') { continue }
+        # The groups have their own finding, which says what the gap means. Two findings for
+        # one fact is noise, and noise is what makes a findings list go unread.
+        if (([string] $c.name) -like 'Group "*') { continue }
         $findings += [pscustomobject] @{
             severity = 'warn'
             title    = ('Could not read: {0}' -f $c.name)
@@ -1031,11 +1055,16 @@ function Build-Model {
 
     foreach ($g in (ConvertTo-Array $Capture.groups)) {
         $gErr = [string] (Get-Prop $g 'error')
-        if ($gErr -and $gErr -ne 'group not found') {
+        if ($gErr) {
+            if (Get-Prop $g 'exists') {
+                $title = ('"{0}" exists, but its members could not be read' -f $g.name)
+            } else {
+                $title = ('"{0}" could not be looked up' -f $g.name)
+            }
             $findings += [pscustomobject] @{
                 severity = 'warn'
-                title    = ('"{0}" could not be read' -f $g.name)
-                body     = ('{0} Who the containers apply to is therefore unknown in this report -- it is not the same as "applies to everyone".' -f $gErr)
+                title    = $title
+                body     = ('{0} Who the containers apply to is therefore unknown in this report -- which is not the same as "applies to everyone".' -f $gErr)
             }
             continue
         }
@@ -1106,11 +1135,22 @@ function Build-Model {
         }
     }
 
+    $valueCount = 0
+    foreach ($a in $areas) { $valueCount += @($a.rows).Count }
+
     if (-not $Capture.fslogixVersion) {
-        $findings += [pscustomobject] @{
-            severity = 'info'
-            title    = 'No FSLogix agent found on this host'
-            body     = 'frxsvc.exe was not found under Program Files. The registry values below may be a prepared configuration rather than a running one.'
+        if ($valueCount -eq 0) {
+            $findings += [pscustomobject] @{
+                severity = 'info'
+                title    = 'This host has no FSLogix configuration'
+                body     = 'No agent under Program Files, no FSLogix registry keys, nothing to map. Either FSLogix has never been installed here, or this is not the host you meant to run it on.'
+            }
+        } else {
+            $findings += [pscustomobject] @{
+                severity = 'info'
+                title    = 'No FSLogix agent found on this host'
+                body     = 'frxsvc.exe was not found under Program Files, but FSLogix registry values are present -- so this is a prepared configuration rather than a running one.'
+            }
         }
     }
 
@@ -1309,6 +1349,9 @@ a{color:var(--accent)}
         }
         Add-Line '</tbody></table></div>'
     }
+    if ($totalValues -eq 0) {
+        Add-Line '<div class="card"><p class="lead">No FSLogix registry values were found on this host &mdash; neither under the product keys nor under the Policies keys. There is nothing to map. The <a href="#coverage">Coverage</a> section says whether that is because nothing is configured or because something could not be read.</p></div>'
+    }
 
     # --- paste blocks ------------------------------------------------------------------
     Add-Line '<h2 id="paste">Paste blocks</h2>'
@@ -1387,15 +1430,21 @@ a{color:var(--accent)}
     # --- extras ----------------------------------------------------------------------------
     Add-Line '<h2 id="extras">Groups, redirections and rule files</h2>'
 
-    $groups = @($Capture.groups | Where-Object { Get-Prop $_ 'exists' })
+    $allGroups  = ConvertTo-Array $Capture.groups
+    $groups     = @($allGroups | Where-Object { Get-Prop $_ 'exists' })
+    $unreadable = @($allGroups | Where-Object { Get-Prop $_ 'error' })
     Add-Line '<div class="card"><h3 style="margin-top:0">FSLogix local groups</h3>'
-    if ($groups.Count -eq 0) {
-        Add-Line '<p class="lead">None of the four FSLogix groups exist on this host, so the containers apply to everyone.</p>'
+    if ($groups.Count -eq 0 -and $unreadable.Count -eq 0) {
+        Add-Line '<p class="lead">None of the four FSLogix groups exist on this host. FSLogix creates them when it is installed, and without an include list the containers would apply to everyone.</p>'
+    } elseif ($groups.Count -eq 0) {
+        Add-Line '<p class="lead">The groups could not be read on this host, so who the containers apply to is unknown. That is not the same as "applies to everyone" &mdash; see the findings.</p>'
     } else {
         Add-Line '<table><thead><tr><th style="width:34%">Group</th><th>Members</th></tr></thead><tbody>'
         foreach ($g in $groups) {
             $members = ConvertTo-Array (Get-Prop $g 'members')
-            $text = if ($members.Count -eq 0) { '<span class="muted">empty</span>' } else { Protect-Html ($members -join ', ') }
+            if (Get-Prop $g 'error')      { $text = '<span class="muted">could not be read</span>' }
+            elseif ($members.Count -eq 0) { $text = '<span class="muted">empty</span>' }
+            else                          { $text = Protect-Html ($members -join ', ') }
             Add-Line ('<tr><td><code>{0}</code></td><td>{1}</td></tr>' -f (Protect-Html $g.name), $text)
         }
         Add-Line '</tbody></table>'
