@@ -32,6 +32,10 @@ registry name. So the report can do three things a dump cannot:
 3. **Name what will break.** Group Policy, include-list membership, App Masking rules and
    unreachable paths are the four that quietly undo a rebuilt profile. They get their own
    findings section instead of a footnote.
+4. **Say what it could not read.** Every collector records whether it read its source, found
+   nothing, or was refused, and the report has a Coverage section for it. On a session host
+   the script normally runs as an ordinary user, and a report that cannot tell *absent* from
+   *not allowed to look* is worse than no report — it is a confident one.
 
 ## What it reads
 
@@ -45,6 +49,7 @@ registry name. So the report can do three things a dump cannot:
 | `redirections.xml` (via `RedirXMLSourceFolder`) | the content for NME's Redirections toggle |
 | `%ProgramFiles%\FSLogix\Apps\Rules` | App Masking rule files — NME does not carry these |
 | `dsregcmd /status` | domain / Entra ID / hybrid, for the Entra ID storage checkbox |
+| who the script runs as, and whether elevated | so the Coverage section can be read honestly |
 
 **The Group Policy point is the one worth knowing.** FSLogix's own ADMX writes into the same
 registry keys the product uses, so a GPO-set value is indistinguishable from a locally set one
@@ -112,14 +117,29 @@ It lives in the script so the tool stays a single file to copy onto a locked-dow
 
 ## Status
 
-v1. The rendering path is exercised against `samples/sample-capture.json`, which covers the
-awkward cases on purpose: a Policies key contradicting the product key, a `QWord` that cannot
-be expressed in the Advanced editor, a value outside the catalogue, a multi-string path list,
-an unreachable share, App Masking rules and a populated include list.
+v1.1.
 
-**The collection path has not yet been run on a live FSLogix host** — it is written against the
-documented registry layout and should be tried on a real session host before it goes in front
-of a customer.
+**The collection path has run on a live host**: an AVD session host on Windows 11 Enterprise
+multi-session with FSLogix 3.26, Entra ID hybrid joined — **as an ordinary user, not
+elevated**. Everything came back: the registry keys, the agent version, the services, all four
+local groups *with their members*, `redirections.xml`, the App Masking rule files and the join
+state. Administrator rights are not needed for the report.
+
+That run also produced the three corrections in v1.1: the FSLogix installer's own
+`Apps\InstallPath` / `InstallVersion` are marked as install state and no longer offered for
+pasting; every collector now reports whether it was refused; and `Everyone` in an include list
+is recognised as the installer's default instead of being flagged as a narrowed scope.
+
+The rendering path is exercised against `samples/sample-capture.json`, which carries the
+awkward cases on purpose: a Policies key contradicting the product key, a `QWord` the Advanced
+editor cannot express, a value outside the catalogue, an empty multi-string, a multi-string
+path list, an unreachable share, App Masking rules, a narrowed include list, an `Everyone`
+include list and a refused collector.
+
+**One limit worth knowing:** the Group Policy file scan only sees *local* Group Policy. A
+domain GPO or an Intune policy writes straight into the registry and leaves no file on the
+host, so silence there is not evidence of absence — the `Policies\FSLogix` key is the signal
+that carries, and the report says so where it applies.
 
 ## Documentation
 

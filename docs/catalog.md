@@ -31,7 +31,7 @@ Keys are `<AREA>|<VALUENAME>`, matched case-insensitively. Areas are `Profiles`,
 
 | Field | Meaning |
 |---|---|
-| `Class` | `field` — NME has a named control, so the value is **not** put in a paste block. `registry` — FSLogix Registry Options. `editor` — the area's own NME editor (App Service / Log settings). `unmanaged` — NME does not carry it. |
+| `Class` | `field` — NME has a named control, so the value is **not** put in a paste block. `registry` — FSLogix Registry Options. `editor` — the area's own NME editor (App Service / Log settings). `unmanaged` — not to be carried over at all: either NME does not hold it, or it is install state rather than configuration (`Apps\InstallPath`, `Apps\InstallVersion`). |
 | `Field` | the name of the NME control, for `Class: field` |
 | `Note` | one sentence, shown on the row. Say what the setting decides and what to watch for, not what the name already says. |
 | `Doc` | a link shown on the row |

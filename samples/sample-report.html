@@ -75,14 +75,14 @@ a{color:var(--accent)}
 </head><body><div class="wrap">
 <header>
 <h1>FSLogix configuration of <code>AVD-FIN-03</code></h1>
-<p class="sub">captured 2026-11-17 10:14:03 +01:00  &middot;  FSLogix 2.9.8884.27471  &middot;  Microsoft Windows Server 2022 Datacenter (build 20348)  &middot;  Entra ID hybrid joined</p>
+<p class="sub">captured 2026-11-17 10:14:03 +01:00  &middot;  FSLogix 2.9.8884.27471  &middot;  Microsoft Windows Server 2022 Datacenter (build 20348)  &middot;  Entra ID hybrid joined  &middot;  run as FIN\j.weber (not elevated)</p>
 <div class="facts">
-<div class="fact"><b>33</b><span>values found</span></div>
+<div class="fact"><b>36</b><span>values found</span></div>
 <div class="fact"><b>5</b><span>named NME fields</span></div>
 <div class="fact"><b>26</b><span>registry lines</span></div>
-<div class="fact"><b>5</b><span>need a decision</span></div>
+<div class="fact"><b>6</b><span>need a decision</span></div>
 </div></header>
-<nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#extras">Groups &amp; files</a></nav>
+<nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#coverage">Coverage</a><a href="#extras">Groups &amp; files</a></nav>
 <h2 id="howto">How to rebuild this in Nerdio Manager</h2>
 <div class="card"><ol class="steps">
 <li>Create the profile: <b>Cloud Desktops &gt; Azure Virtual Desktop &gt; Host Pool Profiles</b>, then <b>New profile &gt; FSLogix</b>, and in the <b>FSLogix Profiles storage</b> area select <b>Add</b>. (<a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">help centre</a>)</li>
@@ -102,6 +102,7 @@ a{color:var(--accent)}
 <tr><td><code>DeleteLocalProfileWhenVHDShouldApply</code><span class="note">DWord</span></td><td class="val">1<span class="note">delete local profile</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Deletes a local profile when a container should have applied. Destructive on the host, and the usual cure for &quot;temp profile&quot; symptoms on pooled hosts. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
 <tr><td><code>Enabled</code><span class="note">DWord</span></td><td class="val">1<span class="note">enabled</span></td><td><span class="tag tag-field">field</span><span class="note">Enable FSLogix profiles</span></td><td>Per host pool: Settings &gt; FSLogix &gt; Enable FSLogix profiles. NME installs the agent on new or re-imaged hosts when this is on. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124330262925-FSLogix-per-host-pool-customization">docs</a></td></tr>
 <tr><td><code>FlipFlopProfileDirectoryName</code><span class="note">DWord</span></td><td class="val">1<span class="note">username_SID</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Folder naming on the share: username_SID instead of SID_username. Changing it orphans every existing container -- keep whatever the share already uses. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>FoldersToRemove</code><span class="note">MultiString</span></td><td class="val"></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td><span class="muted">Not in the catalogue. It is carried over unchanged in the paste block below; check it against the Microsoft reference.</span></td></tr>
 <tr><td><code>IsDynamic</code><span class="note">DWord</span></td><td class="val">1<span class="note">dynamic</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Dynamically expanding container. Off means the full size is allocated on the share immediately. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
 <tr><td><code>LockedRetryCount</code><span class="note">DWord</span></td><td class="val">3</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Retries when the container is locked by another host. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
 <tr><td><code>LockedRetryInterval</code><span class="note">DWord</span></td><td class="val">15</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Seconds between those retries. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
@@ -139,6 +140,8 @@ a{color:var(--accent)}
 <p class="lead">The FSLogix application services. In NME these sit behind the &quot;Manage App Service settings&quot; checkbox of the FSLogix profile.</p>
 <table><thead><tr><th style="width:24%">Setting</th><th style="width:26%">Value on this host</th><th style="width:14%">In Nerdio</th><th>Note</th></tr></thead><tbody>
 <tr><td><code>CleanupInvalidSessions</code><span class="note">DWord</span></td><td class="val">1<span class="note">on</span></td><td><span class="tag tag-editor">editor</span><span class="note">Manage App Service settings</span></td><td>Cleans up sessions left behind by a crash. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>InstallPath</code><span class="note">String</span></td><td class="val">C:\Program Files\FSLogix\Apps\</td><td><span class="tag tag-registry">do not copy</span></td><td>Where the FSLogix agent is installed, written by its installer. Nerdio Manager installs the agent itself -- nothing to carry over. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>InstallVersion</code><span class="note">String</span></td><td class="val">2.9.8884.27471</td><td><span class="tag tag-registry">do not copy</span></td><td>The agent version this host happens to have, written by its installer. In NME you choose it in the profile's Version drop-down instead of copying it. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
 </tbody></table></div>
 <div class="card">
 <h3>Logging <span class="muted">&mdash; Manage Log settings</span></h3>
@@ -198,19 +201,43 @@ a{color:var(--accent)}
 <div class="finding warn"><b>A Policies key exists for Profile Container</b><p>HKLM\SOFTWARE\Policies\FSLogix\Profiles is present on this host. Values there come from Group Policy or Intune and are re-applied on every policy refresh -- they will overwrite what Nerdio Manager writes. They are listed separately below; decide per value which configuration you want to keep before you paste anything.</p></div>
 <div class="finding warn"><b>Profile Container\SizeInMBs is set twice, with different values</b><p>The product key says &quot;30000&quot;, the Policies key says &quot;50000&quot;. Only one of them is what the environment actually runs on -- settle that before rebuilding the profile in Nerdio Manager, otherwise the value you type there is the one that loses.</p></div>
 <div class="finding warn"><b>Group Policy on this host mentions FSLogix</b><p>1 policy file(s) under %WINDIR%\System32\GroupPolicy reference FSLogix: C:\Windows\System32\GroupPolicy\Machine\registry.pol. FSLogix's own ADMX writes into the same registry keys the product uses, so a GPO-set value looks exactly like a locally set one -- and it wins after every policy refresh. The help centre is explicit: session hosts should not receive conflicting FSLogix configurations from GPOs.</p></div>
-<div class="finding warn"><b>&quot;FSLogix Profile Include List&quot; has 1 member(s)</b><p>Members: FIN\AVD-Users. An include list means FSLogix applies to those members only. Nerdio Manager does not manage include-list membership -- reproduce it with a scripted action, or the containers will apply to everyone in the new environment.</p></div>
+<div class="finding warn"><b>Could not read: Group Policy files</b><p>2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here (C:\Windows\System32\GroupPolicy). Whatever this would have shown is missing from the report -- absent and unreadable look the same everywhere else, so treat this part as unknown rather than empty. This run was not elevated; an elevated run may get further.</p></div>
+<div class="finding warn"><b>&quot;FSLogix Profile Include List&quot; is narrowed to 1 member(s)</b><p>Members: FIN\AVD-Users -- and not Everyone, so FSLogix applies to those members only. Nerdio Manager does not manage include-list membership; reproduce it with a scripted action, or the containers will apply to everyone in the new environment.</p></div>
 <div class="finding warn"><b>Path not reachable from this host: \\fin-fs01\fslogix$\profiles</b><p>Configured as Profiles\VHDLocations. Checked from this session host at capture time; it may still be correct for the target environment.</p></div>
 <div class="finding unmanaged"><b>3 App Masking rule file(s) on this host</b><p>Nerdio Manager configures the FSLogix profile and Office containers; App Masking rule sets are not part of that configuration. Carry them over with a scripted action or your image build. Files: SAP-GUI.fxa, SAP-GUI.fxr, Visio.fxr</p></div>
 <div class="finding info"><b>Profiles\VolumeWaitTimeMs cannot be typed into the Advanced editor</b><p>The value is of type QWord. Enter it under &quot;All settings&quot;, or reproduce it with a scripted action. Current value: 20000</p></div>
 <div class="finding info"><b>redirections.xml is in use</b><p>The host reads its redirections from \\fin-fs01\fslogix$\config\redirections.xml. In Nerdio Manager this becomes the &quot;Redirections&quot; toggle on the FSLogix profile; the file content is reproduced at the end of this report so it can be pasted there.</p></div>
 <div class="finding info"><b>&quot;FSLogix Profile Exclude List&quot; has 2 member(s)</b><p>Members: AVD-FIN-03\Administrator, FIN\AVD-Admins. Nerdio Manager has two checkboxes for the common cases -- &quot;Exclude the local admin accounts from FSLogix&quot; and &quot;Exclude domain accounts from FSLogix&quot; (which takes the domain in a box below). Anything else in this group has to be reproduced by hand or with a scripted action.</p></div>
+<div class="finding info"><b>&quot;FSLogix ODFC Include List&quot; contains Everyone -- the default</b><p>This is what the FSLogix installer puts there: the containers apply to all users, minus whoever is in the matching exclude list. Nothing to reproduce in Nerdio Manager.</p></div>
 </div>
+<h2 id="coverage">Coverage</h2>
+<div class="card">
+<p class="lead"><b>1 of 17 collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>
+<table><thead><tr><th style="width:34%">Collector</th><th style="width:12%">Result</th><th>Detail</th></tr></thead><tbody>
+<tr class="policy"><td>Group Policy files</td><td><span class="tag tag-registry">denied</span></td><td>2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here<span class="note">C:\Windows\System32\GroupPolicy</span></td></tr>
+<tr><td>Group &quot;FSLogix ODFC Exclude List&quot;</td><td><span class="tag tag-registry">empty</span></td><td>0 member(s)<span class="note">local groups</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\Policies\FSLogix\ODFC (policy)</td><td><span class="tag tag-registry">absent</span></td><td>key does not exist on this host<span class="note">HKLM\SOFTWARE\Policies\FSLogix\ODFC</span></td></tr>
+<tr><td>Applied GPO list</td><td><span class="tag tag-registry">skipped</span></td><td>not requested (-IncludeGpResult)<span class="note">gpresult.exe</span></td></tr>
+<tr><td>App Masking rules</td><td><span class="tag tag-registry">ok</span></td><td>3 file(s)<span class="note">C:\Program Files\FSLogix\Apps\Rules</span></td></tr>
+<tr><td>FSLogix agent version</td><td><span class="tag tag-registry">ok</span></td><td>2.9.8884.27471<span class="note">C:\Program Files\FSLogix\Apps\frxsvc.exe</span></td></tr>
+<tr><td>FSLogix services</td><td><span class="tag tag-registry">ok</span></td><td>3 of 4 present<span class="note">service control manager</span></td></tr>
+<tr><td>Group &quot;FSLogix ODFC Include List&quot;</td><td><span class="tag tag-registry">ok</span></td><td>1 member(s)<span class="note">local groups</span></td></tr>
+<tr><td>Group &quot;FSLogix Profile Exclude List&quot;</td><td><span class="tag tag-registry">ok</span></td><td>2 member(s)<span class="note">local groups</span></td></tr>
+<tr><td>Group &quot;FSLogix Profile Include List&quot;</td><td><span class="tag tag-registry">ok</span></td><td>1 member(s)<span class="note">local groups</span></td></tr>
+<tr><td>Join state</td><td><span class="tag tag-registry">ok</span></td><td>dsregcmd /status<span class="note">dsregcmd.exe</span></td></tr>
+<tr><td>redirections.xml</td><td><span class="tag tag-registry">ok</span></td><td>412 characters<span class="note">\\fin-fs01\fslogix$\config\redirections.xml</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\FSLogix\Apps (product)</td><td><span class="tag tag-registry">ok</span></td><td>3 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\Apps</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\FSLogix\Logging (product)</td><td><span class="tag tag-registry">ok</span></td><td>3 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\Logging</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\FSLogix\ODFC (product)</td><td><span class="tag tag-registry">ok</span></td><td>10 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\ODFC</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\FSLogix\Profiles (product)</td><td><span class="tag tag-registry">ok</span></td><td>19 value(s)<span class="note">HKLM\SOFTWARE\FSLogix\Profiles</span></td></tr>
+<tr><td>Registry HKLM\SOFTWARE\Policies\FSLogix\Profiles (policy)</td><td><span class="tag tag-registry">ok</span></td><td>1 value(s)<span class="note">HKLM\SOFTWARE\Policies\FSLogix\Profiles</span></td></tr>
+</tbody></table></div>
 <h2 id="extras">Groups, redirections and rule files</h2>
 <div class="card"><h3 style="margin-top:0">FSLogix local groups</h3>
 <table><thead><tr><th style="width:34%">Group</th><th>Members</th></tr></thead><tbody>
 <tr><td><code>FSLogix Profile Include List</code></td><td>FIN\AVD-Users</td></tr>
 <tr><td><code>FSLogix Profile Exclude List</code></td><td>AVD-FIN-03\Administrator, FIN\AVD-Admins</td></tr>
-<tr><td><code>FSLogix ODFC Include List</code></td><td><span class="muted">empty</span></td></tr>
+<tr><td><code>FSLogix ODFC Include List</code></td><td>Everyone</td></tr>
 <tr><td><code>FSLogix ODFC Exclude List</code></td><td><span class="muted">empty</span></td></tr>
 </tbody></table>
 </div>
@@ -241,7 +268,7 @@ a{color:var(--accent)}
 <tr><td><code>frxccds</code></td><td>Stopped</td><td>Manual</td></tr>
 <tr><td><code>frxdrv</code></td><td>Running</td><td>System</td></tr>
 </tbody></table></div>
-<footer>Generated by <b>fslogix-to-nerdio</b> 1.0.0 on 2026-11-17 10:14:03 +01:00. Read-only: nothing on this host was changed. Navigation paths and field names are taken from the Nerdio help centre; verify them against your own version. Not affiliated with, or endorsed by, Nerdio or Microsoft.</footer>
+<footer>Generated by <b>fslogix-to-nerdio</b> 1.1.0 on 2026-11-17 10:14:03 +01:00. Read-only: nothing on this host was changed. Navigation paths and field names are taken from the Nerdio help centre; verify them against your own version. Not affiliated with, or endorsed by, Nerdio or Microsoft.</footer>
 </div>
 <script>
 document.addEventListener('click', function (e) {

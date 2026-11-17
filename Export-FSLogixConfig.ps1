@@ -71,7 +71,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script:SchemaVersion  = 'fslogix-to-nerdio/1'
-$script:ToolVersion    = '1.0.0'
+$script:ToolVersion    = '1.1.0'
+
+# What each collector managed to do. The point of this list is that "not found" and "not
+# allowed to look" must never render the same way -- especially when the script runs as an
+# ordinary user, which is the normal case on a session host.
+$script:Collectors = @()
 
 # --------------------------------------------------------------------------------------
 # Areas. One per FSLogix registry key that NME exposes as its own editor.
@@ -243,6 +248,11 @@ function Get-BuiltInCatalog {
     # --- App services and logging -------------------------------------------------------
     Add-Entry 'Apps|CleanupInvalidSessions' @{ Class = 'editor'; Note = 'Cleans up sessions left behind by a crash.'; Enum = @{ '0' = 'off'; '1' = 'on' }; Doc = $script:Doc.Settings }
     Add-Entry 'Apps|RoamSearch'             @{ Class = 'editor'; Note = 'Legacy search roaming on the app service side.'; Doc = $script:Doc.MsRef }
+    # Written by the FSLogix installer, not by anyone configuring it. Carrying these over
+    # would put one host's install state into another environment's profile.
+    Add-Entry 'Apps|InstallPath'    @{ Class = 'unmanaged'; Note = 'Where the FSLogix agent is installed, written by its installer. Nerdio Manager installs the agent itself -- nothing to carry over.'; Doc = $script:Doc.Settings }
+    Add-Entry 'Apps|InstallVersion' @{ Class = 'unmanaged'; Note = 'The agent version this host happens to have, written by its installer. In NME you choose it in the profile''s Version drop-down instead of copying it.'; Doc = $script:Doc.Settings }
+    Add-Entry 'Apps|InstallDate'    @{ Class = 'unmanaged'; Note = 'When the agent was installed here. Install state, not configuration.'; Doc = $script:Doc.Settings }
     Add-Entry 'Logging|LogDir'              @{ Class = 'editor'; Note = 'Log destination. A UNC path here means every host writes to one share -- check it still exists in the target environment.'; Doc = $script:Doc.Settings }
     Add-Entry 'Logging|LogFileKeepingPeriod' @{ Class = 'editor'; Note = 'Days of logs kept on the host.'; Doc = $script:Doc.Settings }
     Add-Entry 'Logging|LoggingEnabled'      @{ Class = 'editor'; Note = 'Global logging switch.'; Doc = $script:Doc.Settings }
@@ -281,6 +291,31 @@ function Protect-Html {
     return $t
 }
 
+function Add-CollectorStatus {
+    # Status: ok | empty | absent | denied | error | skipped
+    param([string] $Name, [string] $Status, [string] $Detail, [string] $Source)
+    $script:Collectors += [pscustomobject] [ordered]@{
+        name = $Name; status = $Status; detail = $Detail; source = $Source
+    }
+}
+
+function Get-ErrorKind {
+    param($ErrorRecord)
+    $msg = [string] $ErrorRecord.Exception.Message
+    if ($ErrorRecord.Exception -is [System.UnauthorizedAccessException]) { return 'denied' }
+    if ($ErrorRecord.Exception -is [System.Security.SecurityException])   { return 'denied' }
+    if ($msg -match 'Requested registry access is not allowed|Access to the path|Zugriff verweigert|is denied') { return 'denied' }
+    return 'error'
+}
+
+function Test-IsElevated {
+    try {
+        $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $pr = New-Object System.Security.Principal.WindowsPrincipal($id)
+        return [bool] $pr.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch { return $null }
+}
+
 function Test-IsWindows {
     if ($PSVersionTable.PSVersion.Major -le 5) { return $true }
     return [bool] (Get-Variable -Name IsWindows -ValueOnly -ErrorAction SilentlyContinue)
@@ -292,10 +327,33 @@ function Test-IsWindows {
 function Read-RegistryArea {
     param([string] $Path, [string] $Area, [string] $Scope)
 
-    $result = [ordered]@{ area = $Area; scope = $Scope; path = ($Path -replace '^HKLM:', 'HKLM'); exists = $false; values = @() }
-    if (-not (Test-Path -LiteralPath $Path)) { return [pscustomobject] $result }
+    $shown  = ($Path -replace '^HKLM:', 'HKLM')
+    $label  = ('Registry {0} ({1})' -f $shown, $Scope)
+    $result = [ordered]@{ area = $Area; scope = $Scope; path = $shown; exists = $false; readable = $true; error = $null; values = @() }
 
-    $key = Get-Item -LiteralPath $Path
+    $exists = $false
+    try {
+        $exists = Test-Path -LiteralPath $Path -ErrorAction Stop
+    } catch {
+        $result.readable = $false
+        $result.error = $_.Exception.Message
+        Add-CollectorStatus -Name $label -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source $shown
+        return [pscustomobject] $result
+    }
+    if (-not $exists) {
+        Add-CollectorStatus -Name $label -Status 'absent' -Detail 'key does not exist on this host' -Source $shown
+        return [pscustomobject] $result
+    }
+
+    try {
+        $key = Get-Item -LiteralPath $Path -ErrorAction Stop
+    } catch {
+        $result.exists = $true
+        $result.readable = $false
+        $result.error = $_.Exception.Message
+        Add-CollectorStatus -Name $label -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source $shown
+        return [pscustomobject] $result
+    }
     $result.exists = $true
     $values = @()
     foreach ($name in ($key.GetValueNames() | Sort-Object)) {
@@ -319,6 +377,9 @@ function Read-RegistryArea {
         }
     }
     $result.values = $values
+    $status = 'ok'
+    if ($values.Count -eq 0) { $status = 'empty' }
+    Add-CollectorStatus -Name $label -Status $status -Detail ('{0} value(s)' -f $values.Count) -Source $shown
     return [pscustomobject] $result
 }
 
@@ -328,10 +389,18 @@ function Get-FSLogixVersion {
         (Join-Path $env:ProgramFiles 'FSLogix\Apps\frxccd.exe')
     )
     foreach ($c in $candidates) {
-        if (Test-Path -LiteralPath $c) {
-            try { return (Get-Item -LiteralPath $c).VersionInfo.FileVersion } catch { }
+        try {
+            if (Test-Path -LiteralPath $c -ErrorAction Stop) {
+                $v = (Get-Item -LiteralPath $c -ErrorAction Stop).VersionInfo.FileVersion
+                Add-CollectorStatus -Name 'FSLogix agent version' -Status 'ok' -Detail $v -Source $c
+                return $v
+            }
+        } catch {
+            Add-CollectorStatus -Name 'FSLogix agent version' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source $c
+            return $null
         }
     }
+    Add-CollectorStatus -Name 'FSLogix agent version' -Status 'absent' -Detail 'frxsvc.exe not found under Program Files' -Source (Join-Path $env:ProgramFiles 'FSLogix\Apps')
     return $null
 }
 
@@ -345,8 +414,13 @@ function Get-JoinState {
             $state.domainJoined = [bool] ($text -match '(?m)^\s*DomainJoined\s*:\s*YES')
             $state.entraJoined  = [bool] ($text -match '(?m)^\s*AzureAdJoined\s*:\s*YES')
             $state.entraHybrid  = ($state.domainJoined -and $state.entraJoined)
+            Add-CollectorStatus -Name 'Join state' -Status 'ok' -Detail 'dsregcmd /status' -Source 'dsregcmd.exe'
+        } else {
+            Add-CollectorStatus -Name 'Join state' -Status 'empty' -Detail 'dsregcmd produced no output' -Source 'dsregcmd.exe'
         }
-    } catch { }
+    } catch {
+        Add-CollectorStatus -Name 'Join state' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source 'dsregcmd.exe'
+    }
     return [pscustomobject] $state
 }
 
@@ -357,13 +431,18 @@ function Get-FSLogixGroups {
     )
     $groups = @()
     foreach ($n in $names) {
-        $entry = [ordered]@{ name = $n; exists = $false; members = @(); error = $null }
+        $entry = [ordered]@{ name = $n; exists = $false; members = @(); memberSids = @(); error = $null }
         try {
             $g = Get-LocalGroup -Name $n -ErrorAction Stop
             $entry.exists = $true
             $members = @()
-            foreach ($m in (Get-LocalGroupMember -Group $g -ErrorAction Stop)) { $members += [string] $m.Name }
+            $sids = @()
+            foreach ($m in (Get-LocalGroupMember -Group $g -ErrorAction Stop)) {
+                $members += [string] $m.Name
+                if ($m.SID) { $sids += [string] $m.SID.Value }
+            }
             $entry.members = $members
+            $entry.memberSids = $sids
         } catch {
             # Get-LocalGroupMember trips over orphaned or Entra-only SIDs; fall back to net.exe
             try {
@@ -387,6 +466,17 @@ function Get-FSLogixGroups {
                 $entry.error = $_.Exception.Message
             }
         }
+
+        if ($entry.exists) {
+            $st = 'ok'
+            if (@($entry.members).Count -eq 0) { $st = 'empty' }
+            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status $st -Detail ('{0} member(s)' -f @($entry.members).Count) -Source 'local groups'
+        } elseif ($entry.error -and $entry.error -ne 'group not found') {
+            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'denied' -Detail $entry.error -Source 'local groups'
+        } else {
+            Add-CollectorStatus -Name ('Group "{0}"' -f $n) -Status 'absent' -Detail 'group does not exist on this host' -Source 'local groups'
+        }
+
         $groups += [pscustomobject] $entry
     }
     return $groups
@@ -395,27 +485,44 @@ function Get-FSLogixGroups {
 function Get-RedirectionsXml {
     param([string] $Folder)
     $r = [ordered]@{ folder = $Folder; file = $null; found = $false; content = $null; error = $null }
-    if ([string]::IsNullOrWhiteSpace($Folder)) { return [pscustomobject] $r }
+    if ([string]::IsNullOrWhiteSpace($Folder)) {
+        Add-CollectorStatus -Name 'redirections.xml' -Status 'skipped' -Detail 'RedirXMLSourceFolder is not set on this host' -Source 'registry'
+        return [pscustomobject] $r
+    }
     try {
         $file = Join-Path $Folder 'redirections.xml'
         $r.file = $file
-        if (Test-Path -LiteralPath $file) {
+        if (Test-Path -LiteralPath $file -ErrorAction Stop) {
             $r.found = $true
             $r.content = (Get-Content -LiteralPath $file -Raw -ErrorAction Stop)
+            Add-CollectorStatus -Name 'redirections.xml' -Status 'ok' -Detail ('{0} characters' -f ([string] $r.content).Length) -Source $file
+        } else {
+            Add-CollectorStatus -Name 'redirections.xml' -Status 'absent' -Detail 'the configured folder holds no redirections.xml' -Source $file
         }
-    } catch { $r.error = $_.Exception.Message }
+    } catch {
+        $r.error = $_.Exception.Message
+        Add-CollectorStatus -Name 'redirections.xml' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source ([string] $r.file)
+    }
     return [pscustomobject] $r
 }
 
 function Get-AppMaskingRules {
     $dir = Join-Path $env:ProgramFiles 'FSLogix\Apps\Rules'
     $out = @()
-    if (-not (Test-Path -LiteralPath $dir)) { return $out }
     try {
+        if (-not (Test-Path -LiteralPath $dir -ErrorAction Stop)) {
+            Add-CollectorStatus -Name 'App Masking rules' -Status 'absent' -Detail 'the Rules folder does not exist' -Source $dir
+            return $out
+        }
         foreach ($f in (Get-ChildItem -LiteralPath $dir -File -ErrorAction Stop | Sort-Object Name)) {
             $out += [pscustomobject] [ordered]@{ name = $f.Name; sizeBytes = $f.Length; modified = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm') }
         }
-    } catch { }
+        $st = 'ok'
+        if ($out.Count -eq 0) { $st = 'empty' }
+        Add-CollectorStatus -Name 'App Masking rules' -Status $st -Detail ('{0} file(s)' -f $out.Count) -Source $dir
+    } catch {
+        Add-CollectorStatus -Name 'App Masking rules' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source $dir
+    }
     return $out
 }
 
@@ -424,21 +531,36 @@ function Get-PolicyEvidence {
     # different in the registry. The policy files are the one local trace we can read
     # without a domain round trip.
     $out = @()
+    $script:PolicyScan = [pscustomobject] [ordered]@{ scanned = 0; unreadable = 0; hits = 0; error = $null }
     $root = Join-Path $env:windir 'System32\GroupPolicy'
-    if (-not (Test-Path -LiteralPath $root)) { return $out }
     try {
+        if (-not (Test-Path -LiteralPath $root -ErrorAction Stop)) {
+            Add-CollectorStatus -Name 'Group Policy files' -Status 'absent' -Detail 'no GroupPolicy folder on this host' -Source $root
+            return $out
+        }
         foreach ($pol in (Get-ChildItem -LiteralPath $root -Filter 'registry.pol' -Recurse -File -ErrorAction SilentlyContinue)) {
-            $hit = $false
+            $script:PolicyScan.scanned++
             try {
                 $bytes = [System.IO.File]::ReadAllBytes($pol.FullName)
                 $text  = [System.Text.Encoding]::Unicode.GetString($bytes)
-                $hit   = $text -match 'FSLogix'
-            } catch { }
-            if ($hit) {
-                $out += [pscustomobject] [ordered]@{ file = $pol.FullName; modified = $pol.LastWriteTime.ToString('yyyy-MM-dd HH:mm') }
+                if ($text -match 'FSLogix') {
+                    $script:PolicyScan.hits++
+                    $out += [pscustomobject] [ordered]@{ file = $pol.FullName; modified = $pol.LastWriteTime.ToString('yyyy-MM-dd HH:mm') }
+                }
+            } catch {
+                $script:PolicyScan.unreadable++
             }
         }
-    } catch { }
+        $st = 'ok'
+        if ($script:PolicyScan.unreadable -gt 0) { $st = 'denied' }
+        elseif ($script:PolicyScan.scanned -eq 0) { $st = 'empty' }
+        Add-CollectorStatus -Name 'Group Policy files' -Status $st `
+            -Detail ('{0} file(s) scanned, {1} unreadable, {2} mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here' -f $script:PolicyScan.scanned, $script:PolicyScan.unreadable, $script:PolicyScan.hits) `
+            -Source $root
+    } catch {
+        $script:PolicyScan.error = $_.Exception.Message
+        Add-CollectorStatus -Name 'Group Policy files' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source $root
+    }
     return $out
 }
 
@@ -454,11 +576,21 @@ function Get-Capture {
     }
 
     $services = @()
+    $svcError = $null
     foreach ($svc in 'frxsvc','frxccds','frxdrv','frxdrvvt') {
         try {
             $s = Get-Service -Name $svc -ErrorAction Stop
             $services += [pscustomobject] [ordered]@{ name = $svc; status = [string] $s.Status; startType = [string] $s.StartType }
-        } catch { }
+        } catch {
+            if ((Get-ErrorKind $_) -eq 'denied') { $svcError = $_.Exception.Message }
+        }
+    }
+    if ($svcError) {
+        Add-CollectorStatus -Name 'FSLogix services' -Status 'denied' -Detail $svcError -Source 'service control manager'
+    } elseif ($services.Count -eq 0) {
+        Add-CollectorStatus -Name 'FSLogix services' -Status 'absent' -Detail 'none of the FSLogix services exist here' -Source 'service control manager'
+    } else {
+        Add-CollectorStatus -Name 'FSLogix services' -Status 'ok' -Detail ('{0} of 4 present' -f $services.Count) -Source 'service control manager'
     }
 
     $redirFolder = $null
@@ -496,24 +628,40 @@ function Get-Capture {
     try {
         $ci = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
         $os = ('{0} (build {1})' -f $ci.Caption, $ci.BuildNumber)
-    } catch { }
+    } catch {
+        Add-CollectorStatus -Name 'Operating system' -Status (Get-ErrorKind $_) -Detail $_.Exception.Message -Source 'Win32_OperatingSystem'
+    }
+
+    $join            = Get-JoinState
+    $version         = Get-FSLogixVersion
+    $groups          = Get-FSLogixGroups
+    $redirections    = Get-RedirectionsXml -Folder $redirFolder
+    $appMaskingRules = Get-AppMaskingRules
+    $policyEvidence  = Get-PolicyEvidence
+
+    if (-not $WithPathTests)  { Add-CollectorStatus -Name 'Path reachability' -Status 'skipped' -Detail 'not requested (-TestPaths)' -Source 'profile paths' }
+    if (-not $WithGpResult)   { Add-CollectorStatus -Name 'Applied GPO list'  -Status 'skipped' -Detail 'not requested (-IncludeGpResult)' -Source 'gpresult.exe' }
 
     return [pscustomobject] [ordered]@{
         schema          = $script:SchemaVersion
         toolVersion     = $script:ToolVersion
         capturedAt      = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
         computerName    = $env:COMPUTERNAME
+        runAs           = ('{0}\{1}' -f $env:USERDOMAIN, $env:USERNAME)
+        elevated        = (Test-IsElevated)
         os              = $os
-        join            = (Get-JoinState)
-        fslogixVersion  = (Get-FSLogixVersion)
+        join            = $join
+        fslogixVersion  = $version
         services        = $services
         keys            = $keys
-        groups          = (Get-FSLogixGroups)
-        redirections    = (Get-RedirectionsXml -Folder $redirFolder)
-        appMaskingRules = (Get-AppMaskingRules)
-        policyEvidence  = (Get-PolicyEvidence)
+        groups          = $groups
+        redirections    = $redirections
+        appMaskingRules = $appMaskingRules
+        policyEvidence  = $policyEvidence
+        policyScan      = $script:PolicyScan
         pathTests       = $pathTests
         gpResult        = $gpResult
+        collectors      = $script:Collectors
     }
 }
 
@@ -596,7 +744,9 @@ function Build-Model {
                     pasteLine = $line
                 }
 
-                if (($class -eq 'registry' -or $class -eq 'editor') -and -not $line) {
+                # An empty value has nothing to carry over, so it is not a finding -- only a
+                # value that holds something the Advanced editor cannot express is.
+                if (($class -eq 'registry' -or $class -eq 'editor') -and -not $line -and -not [string]::IsNullOrEmpty([string] $v.display)) {
                     $findings += [pscustomobject] @{
                         severity = 'info'
                         title    = ('{0}\{1} cannot be typed into the Advanced editor' -f $areaName, $v.name)
@@ -641,11 +791,34 @@ function Build-Model {
 
     # --- findings that come from the whole picture ---------------------------------------
     $policyFiles = ConvertTo-Array $Capture.policyEvidence
+    $policyScan  = Get-Prop $Capture 'policyScan'
     if ($policyFiles.Count -gt 0) {
         $findings += [pscustomobject] @{
             severity = 'warn'
             title    = 'Group Policy on this host mentions FSLogix'
             body     = ('{0} policy file(s) under %WINDIR%\System32\GroupPolicy reference FSLogix: {1}. FSLogix''s own ADMX writes into the same registry keys the product uses, so a GPO-set value looks exactly like a locally set one -- and it wins after every policy refresh. The help centre is explicit: session hosts should not receive conflicting FSLogix configurations from GPOs.' -f $policyFiles.Count, (($policyFiles | ForEach-Object { $_.file }) -join ', '))
+        }
+    } elseif ($policyScan -and (Get-Prop $policyScan 'scanned')) {
+        $unreadable = [int] (Get-Prop $policyScan 'unreadable' 0)
+        $body = ('{0} policy file(s) were scanned and none mentions FSLogix.' -f (Get-Prop $policyScan 'scanned'))
+        if ($unreadable -gt 0) { $body += (' {0} of them could not be read with these rights, so this is not a clean result.' -f $unreadable) }
+        $body += ' Note what this check can and cannot see: only local Group Policy leaves a file here. A domain GPO or an Intune policy writes straight into the registry, so silence here does not mean no policy -- the Policies key is the signal that does.'
+        $findings += [pscustomobject] @{
+            severity = $(if ($unreadable -gt 0) { 'warn' } else { 'info' })
+            title    = 'No FSLogix mention in the local policy files'
+            body     = $body
+        }
+    }
+
+    # A collector that was blocked must say so. Otherwise "nothing found" and "not allowed to
+    # look" are the same sentence, which is the one failure this report cannot afford.
+    foreach ($c in (ConvertTo-Array (Get-Prop $Capture 'collectors'))) {
+        if ($c.status -ne 'denied' -and $c.status -ne 'error') { continue }
+        $findings += [pscustomobject] @{
+            severity = 'warn'
+            title    = ('Could not read: {0}' -f $c.name)
+            body     = ('{0} ({1}). Whatever this would have shown is missing from the report -- absent and unreadable look the same everywhere else, so treat this part as unknown rather than empty.{2}' -f `
+                        $c.detail, $c.source, $(if ($Capture.elevated -eq $false) { ' This run was not elevated; an elevated run may get further.' } else { '' }))
         }
     }
 
@@ -668,21 +841,53 @@ function Build-Model {
     }
 
     foreach ($g in (ConvertTo-Array $Capture.groups)) {
+        $gErr = [string] (Get-Prop $g 'error')
+        if ($gErr -and $gErr -ne 'group not found') {
+            $findings += [pscustomobject] @{
+                severity = 'warn'
+                title    = ('"{0}" could not be read' -f $g.name)
+                body     = ('{0} Who the containers apply to is therefore unknown in this report -- it is not the same as "applies to everyone".' -f $gErr)
+            }
+            continue
+        }
         if (-not (Get-Prop $g 'exists')) { continue }
         $members = ConvertTo-Array (Get-Prop $g 'members')
         if ($members.Count -eq 0) { continue }
+
+        # "Everyone" (S-1-1-0) is what the FSLogix installer itself puts in the include lists.
+        # Treating that as a finding to act on sends people hunting for a difference that is
+        # the default. Localised installs name it differently, so match the SID as well.
+        $sids = ConvertTo-Array (Get-Prop $g 'memberSids')
+        $hasEveryone = ($sids -contains 'S-1-1-0')
+        if (-not $hasEveryone) {
+            foreach ($m in $members) { if ($m -match '(^|\\)(Everyone|Jeder)$') { $hasEveryone = $true } }
+        }
+        $others = @($members | Where-Object { $_ -notmatch '(^|\\)(Everyone|Jeder)$' })
         $isExclude = ([string] $g.name) -like '*Exclude*'
+
         if ($isExclude) {
             $findings += [pscustomobject] @{
                 severity = 'info'
                 title    = ('"{0}" has {1} member(s)' -f $g.name, $members.Count)
                 body     = ('Members: {0}. Nerdio Manager has two checkboxes for the common cases -- "Exclude the local admin accounts from FSLogix" and "Exclude domain accounts from FSLogix" (which takes the domain in a box below). Anything else in this group has to be reproduced by hand or with a scripted action.' -f ($members -join ', '))
             }
+        } elseif ($hasEveryone -and $others.Count -eq 0) {
+            $findings += [pscustomobject] @{
+                severity = 'info'
+                title    = ('"{0}" contains Everyone -- the default' -f $g.name)
+                body     = 'This is what the FSLogix installer puts there: the containers apply to all users, minus whoever is in the matching exclude list. Nothing to reproduce in Nerdio Manager.'
+            }
+        } elseif ($hasEveryone) {
+            $findings += [pscustomobject] @{
+                severity = 'info'
+                title    = ('"{0}" has Everyone and {1} more member(s)' -f $g.name, $others.Count)
+                body     = ('Everyone is already in the list, so the containers apply to all users and the extra entries ({0}) change nothing today. Worth a look only if someone meant to narrow the scope and left Everyone in by accident.' -f ($others -join ', '))
+            }
         } else {
             $findings += [pscustomobject] @{
                 severity = 'warn'
-                title    = ('"{0}" has {1} member(s)' -f $g.name, $members.Count)
-                body     = ('Members: {0}. An include list means FSLogix applies to those members only. Nerdio Manager does not manage include-list membership -- reproduce it with a scripted action, or the containers will apply to everyone in the new environment.' -f ($members -join ', '))
+                title    = ('"{0}" is narrowed to {1} member(s)' -f $g.name, $members.Count)
+                body     = ('Members: {0} -- and not Everyone, so FSLogix applies to those members only. Nerdio Manager does not manage include-list membership; reproduce it with a scripted action, or the containers will apply to everyone in the new environment.' -f ($members -join ', '))
             }
         }
     }
@@ -836,6 +1041,14 @@ a{color:var(--accent)}
     if ($version) { $subParts += ('FSLogix ' + (Protect-Html $version)) } else { $subParts += 'no FSLogix agent found' }
     if ($os)      { $subParts += (Protect-Html $os) }
     $subParts += $joinText
+    $runAs = [string] (Get-Prop $Capture 'runAs')
+    $elev  = Get-Prop $Capture 'elevated'
+    if ($runAs) {
+        $elevText = 'elevation unknown'
+        if ($elev -eq $true)  { $elevText = 'elevated' }
+        if ($elev -eq $false) { $elevText = 'not elevated' }
+        $subParts += ('run as {0} ({1})' -f $runAs, $elevText)
+    }
     Add-Line ('<p class="sub">{0}</p>' -f (Protect-Html ($subParts -join '  &middot;  ')).Replace('&amp;middot;','&middot;'))
     Add-Line '<div class="facts">'
     Add-Line ('<div class="fact"><b>{0}</b><span>values found</span></div>' -f $totalValues)
@@ -844,7 +1057,7 @@ a{color:var(--accent)}
     Add-Line ('<div class="fact"><b>{0}</b><span>need a decision</span></div>' -f $warnCount)
     Add-Line '</div></header>'
 
-    Add-Line '<nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#extras">Groups &amp; files</a></nav>'
+    Add-Line '<nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#coverage">Coverage</a><a href="#extras">Groups &amp; files</a></nav>'
 
     # --- how to rebuild -------------------------------------------------------------------
     Add-Line '<h2 id="howto">How to rebuild this in Nerdio Manager</h2>'
@@ -876,7 +1089,7 @@ a{color:var(--accent)}
                 'field'     { $nme = ('<span class="tag tag-field">field</span><span class="note">{0}</span>' -f (Protect-Html $r.field)) }
                 'registry'  { $nme = '<span class="tag tag-registry">registry</span><span class="note">Registry Options</span>' }
                 'editor'    { $nme = ('<span class="tag tag-editor">editor</span><span class="note">{0}</span>' -f (Protect-Html $a.nmeTarget)) }
-                'unmanaged' { $nme = '<span class="tag tag-registry">not in NME</span>' }
+                'unmanaged' { $nme = '<span class="tag tag-registry">do not copy</span>' }
                 default     { $nme = '<span class="tag tag-registry">registry</span>' }
             }
             if ($r.scope -eq 'policy') { $nme += ' <span class="tag tag-policy">from GPO</span>' }
@@ -935,6 +1148,32 @@ a{color:var(--accent)}
             Add-Line ('<div class="finding {0}"><b>{1}</b><p>{2}</p></div>' -f (Protect-Html $f.severity), (Protect-Html $f.title), (Protect-Html $f.body))
         }
         Add-Line '</div>'
+    }
+
+    # --- coverage ---------------------------------------------------------------------------
+    Add-Line '<h2 id="coverage">Coverage</h2>'
+    $collectors = ConvertTo-Array (Get-Prop $Capture 'collectors')
+    if ($collectors.Count -eq 0) {
+        Add-Line '<div class="card"><p class="lead">This capture was taken with an older version of the tool, which did not record what it could read. Absent and unreadable cannot be told apart in it.</p></div>'
+    } else {
+        $denied = @($collectors | Where-Object { $_.status -eq 'denied' -or $_.status -eq 'error' }).Count
+        Add-Line '<div class="card">'
+        if ($denied -eq 0) {
+            Add-Line '<p class="lead">Every collector either read its source or found nothing there. Where this report says a setting is absent, it is absent -- not merely out of reach.</p>'
+        } else {
+            Add-Line ('<p class="lead"><b>{0} of {1} collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>' -f $denied, $collectors.Count)
+        }
+        Add-Line '<table><thead><tr><th style="width:34%">Collector</th><th style="width:12%">Result</th><th>Detail</th></tr></thead><tbody>'
+        $order = @{ 'denied' = 0; 'error' = 1; 'empty' = 2; 'absent' = 3; 'skipped' = 4; 'ok' = 5 }
+        foreach ($c in ($collectors | Sort-Object @{Expression={ $v = $order[[string] $_.status]; if ($null -eq $v) { 9 } else { $v } }}, @{Expression={$_.name}})) {
+            $cls = ''
+            if ($c.status -eq 'denied' -or $c.status -eq 'error') { $cls = ' class="policy"' }
+            $detail = Protect-Html ([string] $c.detail)
+            if ($c.source) { $detail += ('<span class="note">{0}</span>' -f (Protect-Html ([string] $c.source))) }
+            Add-Line ('<tr{0}><td>{1}</td><td><span class="tag tag-registry">{2}</span></td><td>{3}</td></tr>' -f `
+                $cls, (Protect-Html ([string] $c.name)), (Protect-Html ([string] $c.status)), $detail)
+        }
+        Add-Line '</tbody></table></div>'
     }
 
     # --- extras ----------------------------------------------------------------------------

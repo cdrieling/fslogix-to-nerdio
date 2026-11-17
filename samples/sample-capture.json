@@ -1,8 +1,10 @@
 {
   "schema": "fslogix-to-nerdio/1",
-  "toolVersion": "1.0.0",
+  "toolVersion": "1.1.0",
   "capturedAt": "2026-11-17 10:14:03 +01:00",
   "computerName": "AVD-FIN-03",
+  "runAs": "FIN\\j.weber",
+  "elevated": false,
   "os": "Microsoft Windows Server 2022 Datacenter (build 20348)",
   "join": {
     "domainJoined": true,
@@ -22,11 +24,14 @@
       "scope": "product",
       "path": "HKLM\\SOFTWARE\\FSLogix\\Profiles",
       "exists": true,
+      "readable": true,
+      "error": null,
       "values": [
         { "name": "AccessNetworkAsComputerObject", "kind": "DWord", "data": 1, "display": "1" },
         { "name": "DeleteLocalProfileWhenVHDShouldApply", "kind": "DWord", "data": 1, "display": "1" },
         { "name": "Enabled", "kind": "DWord", "data": 1, "display": "1" },
         { "name": "FlipFlopProfileDirectoryName", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "FoldersToRemove", "kind": "MultiString", "data": [], "display": "" },
         { "name": "IsDynamic", "kind": "DWord", "data": 1, "display": "1" },
         { "name": "LockedRetryCount", "kind": "DWord", "data": 3, "display": "3" },
         { "name": "LockedRetryInterval", "kind": "DWord", "data": 15, "display": "15" },
@@ -48,6 +53,8 @@
       "scope": "policy",
       "path": "HKLM\\SOFTWARE\\Policies\\FSLogix\\Profiles",
       "exists": true,
+      "readable": true,
+      "error": null,
       "values": [
         { "name": "SizeInMBs", "kind": "DWord", "data": 50000, "display": "50000" }
       ]
@@ -57,6 +64,8 @@
       "scope": "product",
       "path": "HKLM\\SOFTWARE\\FSLogix\\ODFC",
       "exists": true,
+      "readable": true,
+      "error": null,
       "values": [
         { "name": "Enabled", "kind": "DWord", "data": 1, "display": "1" },
         { "name": "IncludeOfficeActivation", "kind": "DWord", "data": 1, "display": "1" },
@@ -75,8 +84,12 @@
       "scope": "product",
       "path": "HKLM\\SOFTWARE\\FSLogix\\Apps",
       "exists": true,
+      "readable": true,
+      "error": null,
       "values": [
-        { "name": "CleanupInvalidSessions", "kind": "DWord", "data": 1, "display": "1" }
+        { "name": "CleanupInvalidSessions", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "InstallPath", "kind": "String", "data": "C:\\Program Files\\FSLogix\\Apps\\", "display": "C:\\Program Files\\FSLogix\\Apps\\" },
+        { "name": "InstallVersion", "kind": "String", "data": "2.9.8884.27471", "display": "2.9.8884.27471" }
       ]
     },
     {
@@ -84,6 +97,8 @@
       "scope": "product",
       "path": "HKLM\\SOFTWARE\\FSLogix\\Logging",
       "exists": true,
+      "readable": true,
+      "error": null,
       "values": [
         { "name": "LogDir", "kind": "String", "data": "\\\\fin-fs01\\fslogix$\\logs", "display": "\\\\fin-fs01\\fslogix$\\logs" },
         { "name": "LogFileKeepingPeriod", "kind": "DWord", "data": 7, "display": "7" },
@@ -92,10 +107,10 @@
     }
   ],
   "groups": [
-    { "name": "FSLogix Profile Include List", "exists": true, "members": ["FIN\\AVD-Users"], "error": null },
-    { "name": "FSLogix Profile Exclude List", "exists": true, "members": ["AVD-FIN-03\\Administrator", "FIN\\AVD-Admins"], "error": null },
-    { "name": "FSLogix ODFC Include List", "exists": true, "members": [], "error": null },
-    { "name": "FSLogix ODFC Exclude List", "exists": true, "members": [], "error": null }
+    { "name": "FSLogix Profile Include List", "exists": true, "members": ["FIN\\AVD-Users"], "memberSids": ["S-1-5-21-1004336348-1177238915-682003330-1134"], "error": null },
+    { "name": "FSLogix Profile Exclude List", "exists": true, "members": ["AVD-FIN-03\\Administrator", "FIN\\AVD-Admins"], "memberSids": ["S-1-5-21-900012-500", "S-1-5-21-1004336348-1177238915-682003330-1155"], "error": null },
+    { "name": "FSLogix ODFC Include List", "exists": true, "members": ["Everyone"], "memberSids": ["S-1-1-0"], "error": null },
+    { "name": "FSLogix ODFC Exclude List", "exists": true, "members": [], "memberSids": [], "error": null }
   ],
   "redirections": {
     "folder": "\\\\fin-fs01\\fslogix$\\config",
@@ -112,10 +127,30 @@
   "policyEvidence": [
     { "file": "C:\\Windows\\System32\\GroupPolicy\\Machine\\registry.pol", "modified": "2026-10-30 22:41" }
   ],
+  "policyScan": { "scanned": 2, "unreadable": 0, "hits": 1, "error": null },
   "pathTests": [
     { "area": "Profiles", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\profiles", "reachable": true },
     { "area": "Profiles", "value": "VHDLocations", "path": "\\\\fin-fs01\\fslogix$\\profiles", "reachable": false },
     { "area": "ODFC", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\odfc", "reachable": true }
   ],
-  "gpResult": null
+  "gpResult": null,
+  "collectors": [
+    { "name": "Registry HKLM\\SOFTWARE\\FSLogix\\Profiles (product)", "status": "ok", "detail": "19 value(s)", "source": "HKLM\\SOFTWARE\\FSLogix\\Profiles" },
+    { "name": "Registry HKLM\\SOFTWARE\\Policies\\FSLogix\\Profiles (policy)", "status": "ok", "detail": "1 value(s)", "source": "HKLM\\SOFTWARE\\Policies\\FSLogix\\Profiles" },
+    { "name": "Registry HKLM\\SOFTWARE\\FSLogix\\ODFC (product)", "status": "ok", "detail": "10 value(s)", "source": "HKLM\\SOFTWARE\\FSLogix\\ODFC" },
+    { "name": "Registry HKLM\\SOFTWARE\\Policies\\FSLogix\\ODFC (policy)", "status": "absent", "detail": "key does not exist on this host", "source": "HKLM\\SOFTWARE\\Policies\\FSLogix\\ODFC" },
+    { "name": "Registry HKLM\\SOFTWARE\\FSLogix\\Apps (product)", "status": "ok", "detail": "3 value(s)", "source": "HKLM\\SOFTWARE\\FSLogix\\Apps" },
+    { "name": "Registry HKLM\\SOFTWARE\\FSLogix\\Logging (product)", "status": "ok", "detail": "3 value(s)", "source": "HKLM\\SOFTWARE\\FSLogix\\Logging" },
+    { "name": "FSLogix services", "status": "ok", "detail": "3 of 4 present", "source": "service control manager" },
+    { "name": "FSLogix agent version", "status": "ok", "detail": "2.9.8884.27471", "source": "C:\\Program Files\\FSLogix\\Apps\\frxsvc.exe" },
+    { "name": "Join state", "status": "ok", "detail": "dsregcmd /status", "source": "dsregcmd.exe" },
+    { "name": "Group \"FSLogix Profile Include List\"", "status": "ok", "detail": "1 member(s)", "source": "local groups" },
+    { "name": "Group \"FSLogix Profile Exclude List\"", "status": "ok", "detail": "2 member(s)", "source": "local groups" },
+    { "name": "Group \"FSLogix ODFC Include List\"", "status": "ok", "detail": "1 member(s)", "source": "local groups" },
+    { "name": "Group \"FSLogix ODFC Exclude List\"", "status": "empty", "detail": "0 member(s)", "source": "local groups" },
+    { "name": "redirections.xml", "status": "ok", "detail": "412 characters", "source": "\\\\fin-fs01\\fslogix$\\config\\redirections.xml" },
+    { "name": "App Masking rules", "status": "ok", "detail": "3 file(s)", "source": "C:\\Program Files\\FSLogix\\Apps\\Rules" },
+    { "name": "Group Policy files", "status": "denied", "detail": "2 file(s) scanned, 1 unreadable, 1 mentioning FSLogix -- local policy only, a domain or Intune assignment leaves no file here", "source": "C:\\Windows\\System32\\GroupPolicy" },
+    { "name": "Applied GPO list", "status": "skipped", "detail": "not requested (-IncludeGpResult)", "source": "gpresult.exe" }
+  ]
 }
