@@ -9,8 +9,7 @@
   "join": {
     "domainJoined": true,
     "entraJoined": true,
-    "entraHybrid": true,
-    "raw": null
+    "entraHybrid": true
   },
   "fslogixVersion": "2.9.8884.27471",
   "services": [

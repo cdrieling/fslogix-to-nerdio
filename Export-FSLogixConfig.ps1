@@ -71,7 +71,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script:SchemaVersion  = 'fslogix-to-nerdio/1'
-$script:ToolVersion    = '1.1.1'
+$script:ToolVersion    = '1.1.2'
 
 # What each collector managed to do. The point of this list is that "not found" and "not
 # allowed to look" must never render the same way -- especially when the script runs as an
@@ -549,12 +549,15 @@ function Get-FSLogixVersion {
 }
 
 function Get-JoinState {
-    $state = [ordered]@{ domainJoined = $null; entraJoined = $null; entraHybrid = $null; raw = $null }
+    # Only the three answers are kept. dsregcmd's full output carries the tenant id, the
+    # device id and certificate thumbprint and the signed-in user's address, none of which
+    # the report shows -- and a capture travels: to a colleague, into a ticket, out of the
+    # customer's environment. What is not collected cannot leak.
+    $state = [ordered]@{ domainJoined = $null; entraJoined = $null; entraHybrid = $null }
     try {
         $out = & dsregcmd.exe /status 2>$null
         if ($out) {
             $text = ($out -join "`n")
-            $state.raw = $text
             $state.domainJoined = [bool] ($text -match '(?m)^\s*DomainJoined\s*:\s*YES')
             $state.entraJoined  = [bool] ($text -match '(?m)^\s*AzureAdJoined\s*:\s*YES')
             $state.entraHybrid  = ($state.domainJoined -and $state.entraJoined)
@@ -843,7 +846,7 @@ function Get-Capture {
         groups          = $groups
         redirections    = $redirections
         appMaskingRules = $appMaskingRules
-        policyEvidence  = $policyEvidence
+        policyEvidence  = @($policyEvidence)
         policyScan      = $script:PolicyScan
         pathTests       = $pathTests
         gpResult        = $gpResult
@@ -1346,7 +1349,10 @@ a{color:var(--accent)}
         Add-Line '<div class="card"><p class="lead">Nothing that needs a decision. The configuration maps onto Nerdio Manager as it stands.</p></div>'
     } else {
         Add-Line '<div class="card">'
-        foreach ($f in ($findings | Sort-Object @{Expression={ switch ($_.severity) { 'warn' {0} 'unmanaged' {1} default {2} } }})) {
+        # The second key is not decoration: Sort-Object is not stable, so without it two
+        # findings of the same severity come out in a different order on 5.1 than on 7.x,
+        # and two runs of the same host stop diffing cleanly.
+        foreach ($f in ($findings | Sort-Object @{Expression={ switch ($_.severity) { 'warn' {0} 'unmanaged' {1} default {2} } }}, @{Expression={ [string] $_.title }})) {
             Add-Line ('<div class="finding {0}"><b>{1}</b><p>{2}</p></div>' -f (Protect-Html $f.severity), (Protect-Html $f.title), (Protect-Html $f.body))
         }
         Add-Line '</div>'
@@ -1410,7 +1416,10 @@ a{color:var(--accent)}
         Add-Line '<div class="card"><h3 style="margin-top:0">App Masking rule files <span class="muted">&mdash; not managed by Nerdio Manager</span></h3>'
         Add-Line '<table><thead><tr><th style="width:50%">File</th><th>Size</th><th>Modified</th></tr></thead><tbody>'
         foreach ($r in $rules) {
-            Add-Line ('<tr><td><code>{0}</code></td><td>{1:n0} bytes</td><td>{2}</td></tr>' -f (Protect-Html $r.name), $r.sizeBytes, (Protect-Html ([string] $r.modified)))
+            # Thousands separators follow the machine's culture, so the same host rendered in
+            # two places produced "1,806" and "1.806". The report is English; pin the format.
+            $size = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0:n0}', [double] $r.sizeBytes)
+            Add-Line ('<tr><td><code>{0}</code></td><td>{1} bytes</td><td>{2}</td></tr>' -f (Protect-Html $r.name), $size, (Protect-Html ([string] $r.modified)))
         }
         Add-Line '</tbody></table></div>'
     }

@@ -79,6 +79,13 @@ UNC host is asked on TCP 445 first with a 3-second timeout, and the `Test-Path` 
 capped at 15 seconds: an unreachable share used to make this switch look like a hang, because
 SMB retries for minutes before giving up.
 
+**What a capture contains.** The host name, the shares, the FSLogix settings, the members of
+the four local groups and who ran the script — a configuration export, and it travels: to a
+colleague, into a ticket, out of the customer's tenant. It deliberately does *not* keep the
+full `dsregcmd` output, which carries the tenant id, the device id and certificate thumbprint
+and the signed-in user's address; only the three join answers the report actually uses are
+kept.
+
 Capture on the host, read the report anywhere:
 
 ```powershell
