@@ -8,6 +8,8 @@ whether the rebuilt configuration will actually hold.
 Built for PoCs: the customer's existing FSLogix setup has to be reproduced in Nerdio Manager,
 usually from a host nobody fully documented.
 
+> A personal project, not a Nerdio product — see [Disclaimer](#disclaimer).
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Export-FSLogixConfig.ps1
 ```
@@ -171,8 +173,31 @@ Field names and navigation paths come from the Nerdio help centre:
 · [FSLogix and User Profile Management](https://nmehelp.getnerdio.com/hc/en-us/articles/26126637566477-FSLogix-and-User-Profile-Management).
 Verify them against your own NME version; the UI moves.
 
+## Disclaimer
+
+**This is a personal project.** It is not a Nerdio product, it is not supported by Nerdio, and
+it is not endorsed by Nerdio or Microsoft. The author works at Nerdio as a sales engineer and
+wrote and published this in a private capacity; nothing here represents Nerdio's position,
+roadmap, documentation or support commitments.
+
+**It reads; it does not change anything.** The script touches no setting on the host it runs
+on, and it never talks to Nerdio Manager — the report is something a human works from. What
+you do with the values it hands you is your decision and your responsibility.
+
+**Field names and navigation paths will drift.** They were taken from the public Nerdio help
+centre at the time of writing. The product UI moves; verify them against the version in front
+of you before acting on them, and treat a surprising instruction as out of date rather than
+as a fact.
+
+**You own what you share.** A capture or a report describes a real environment — hosts,
+shares, group members. Read *[What a capture contains](#options)* before you attach one to a
+ticket or hand it to anyone.
+
+Provided **as is**, without warranty or condition of any kind, express or implied, to the
+fullest extent permitted by law.
+
 ## Rights
 
 Copyright (c) 2026 Christian T. Drieling. Licensed under the Apache License 2.0 — see
-[LICENSE](LICENSE). Not affiliated with, or endorsed by, Nerdio or Microsoft. FSLogix and
-Nerdio Manager are the trademarks of their respective owners.
+[LICENSE](LICENSE). FSLogix, Nerdio Manager and Nerdio are the trademarks of their respective
+owners, used here only to say what this tool works with.
