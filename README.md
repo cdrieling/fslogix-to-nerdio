@@ -181,6 +181,10 @@ Verify them against your own NME version; the UI moves.
 
 ## Contributing
 
+**To be told when a new version is cut**, use *Watch → Custom → Releases* on this repository.
+Each release carries the script as a downloadable asset, which is also the transfer that does
+not truncate.
+
 Issues and pull requests are welcome, and two kinds are especially useful:
 
 - **Catalogue entries** for settings the report currently carries without a note. Each one is a
