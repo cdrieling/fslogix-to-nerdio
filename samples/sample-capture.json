@@ -1,0 +1,121 @@
+{
+  "schema": "fslogix-to-nerdio/1",
+  "toolVersion": "1.0.0",
+  "capturedAt": "2026-11-17 10:14:03 +01:00",
+  "computerName": "AVD-FIN-03",
+  "os": "Microsoft Windows Server 2022 Datacenter (build 20348)",
+  "join": {
+    "domainJoined": true,
+    "entraJoined": true,
+    "entraHybrid": true,
+    "raw": null
+  },
+  "fslogixVersion": "2.9.8884.27471",
+  "services": [
+    { "name": "frxsvc",  "status": "Running", "startType": "Automatic" },
+    { "name": "frxccds", "status": "Stopped", "startType": "Manual" },
+    { "name": "frxdrv",  "status": "Running", "startType": "System" }
+  ],
+  "keys": [
+    {
+      "area": "Profiles",
+      "scope": "product",
+      "path": "HKLM\\SOFTWARE\\FSLogix\\Profiles",
+      "exists": true,
+      "values": [
+        { "name": "AccessNetworkAsComputerObject", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "DeleteLocalProfileWhenVHDShouldApply", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "Enabled", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "FlipFlopProfileDirectoryName", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "IsDynamic", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "LockedRetryCount", "kind": "DWord", "data": 3, "display": "3" },
+        { "name": "LockedRetryInterval", "kind": "DWord", "data": 15, "display": "15" },
+        { "name": "PreventLoginWithFailure", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "PreventLoginWithTempProfile", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "ProfileType", "kind": "DWord", "data": 0, "display": "0" },
+        { "name": "RedirXMLSourceFolder", "kind": "String", "data": "\\\\fin-fs01\\fslogix$\\config", "display": "\\\\fin-fs01\\fslogix$\\config" },
+        { "name": "RoamIdentity", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "SetTempToLocalPath", "kind": "DWord", "data": 3, "display": "3" },
+        { "name": "SizeInMBs", "kind": "DWord", "data": 30000, "display": "30000" },
+        { "name": "VHDLocations", "kind": "MultiString", "data": ["\\\\finstorage01.file.core.windows.net\\profiles", "\\\\fin-fs01\\fslogix$\\profiles"], "display": "\\\\finstorage01.file.core.windows.net\\profiles\n\\\\fin-fs01\\fslogix$\\profiles" },
+        { "name": "VolumeType", "kind": "String", "data": "vhdx", "display": "vhdx" },
+        { "name": "VolumeWaitTimeMs", "kind": "QWord", "data": 20000, "display": "20000" },
+        { "name": "ZzCustomerLegacyFlag", "kind": "DWord", "data": 1, "display": "1" }
+      ]
+    },
+    {
+      "area": "Profiles",
+      "scope": "policy",
+      "path": "HKLM\\SOFTWARE\\Policies\\FSLogix\\Profiles",
+      "exists": true,
+      "values": [
+        { "name": "SizeInMBs", "kind": "DWord", "data": 50000, "display": "50000" }
+      ]
+    },
+    {
+      "area": "ODFC",
+      "scope": "product",
+      "path": "HKLM\\SOFTWARE\\FSLogix\\ODFC",
+      "exists": true,
+      "values": [
+        { "name": "Enabled", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "IncludeOfficeActivation", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "IncludeOneDrive", "kind": "DWord", "data": 0, "display": "0" },
+        { "name": "IncludeOutlook", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "IncludeTeams", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "IsDynamic", "kind": "DWord", "data": 1, "display": "1" },
+        { "name": "NumSessionVHDsToKeep", "kind": "DWord", "data": 2, "display": "2" },
+        { "name": "SizeInMBs", "kind": "DWord", "data": 30000, "display": "30000" },
+        { "name": "VHDLocations", "kind": "String", "data": "\\\\finstorage01.file.core.windows.net\\odfc", "display": "\\\\finstorage01.file.core.windows.net\\odfc" },
+        { "name": "VolumeType", "kind": "String", "data": "vhdx", "display": "vhdx" }
+      ]
+    },
+    {
+      "area": "Apps",
+      "scope": "product",
+      "path": "HKLM\\SOFTWARE\\FSLogix\\Apps",
+      "exists": true,
+      "values": [
+        { "name": "CleanupInvalidSessions", "kind": "DWord", "data": 1, "display": "1" }
+      ]
+    },
+    {
+      "area": "Logging",
+      "scope": "product",
+      "path": "HKLM\\SOFTWARE\\FSLogix\\Logging",
+      "exists": true,
+      "values": [
+        { "name": "LogDir", "kind": "String", "data": "\\\\fin-fs01\\fslogix$\\logs", "display": "\\\\fin-fs01\\fslogix$\\logs" },
+        { "name": "LogFileKeepingPeriod", "kind": "DWord", "data": 7, "display": "7" },
+        { "name": "LoggingEnabled", "kind": "DWord", "data": 2, "display": "2" }
+      ]
+    }
+  ],
+  "groups": [
+    { "name": "FSLogix Profile Include List", "exists": true, "members": ["FIN\\AVD-Users"], "error": null },
+    { "name": "FSLogix Profile Exclude List", "exists": true, "members": ["AVD-FIN-03\\Administrator", "FIN\\AVD-Admins"], "error": null },
+    { "name": "FSLogix ODFC Include List", "exists": true, "members": [], "error": null },
+    { "name": "FSLogix ODFC Exclude List", "exists": true, "members": [], "error": null }
+  ],
+  "redirections": {
+    "folder": "\\\\fin-fs01\\fslogix$\\config",
+    "file": "\\\\fin-fs01\\fslogix$\\config\\redirections.xml",
+    "found": true,
+    "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<FrxProfileFolderRedirection ExcludeCommonFolders=\"0\">\n  <Excludes>\n    <Exclude Copy=\"0\">AppData\\Local\\Temp</Exclude>\n    <Exclude Copy=\"0\">AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache</Exclude>\n    <Exclude Copy=\"0\">AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Cache</Exclude>\n  </Excludes>\n  <Includes>\n    <Include Copy=\"3\">AppData\\Local\\Microsoft\\Teams\\Backgrounds</Include>\n  </Includes>\n</FrxProfileFolderRedirection>\n",
+    "error": null
+  },
+  "appMaskingRules": [
+    { "name": "SAP-GUI.fxa", "sizeBytes": 2048, "modified": "2026-09-02 11:20" },
+    { "name": "SAP-GUI.fxr", "sizeBytes": 18432, "modified": "2026-09-02 11:20" },
+    { "name": "Visio.fxr", "sizeBytes": 9216, "modified": "2026-05-14 08:03" }
+  ],
+  "policyEvidence": [
+    { "file": "C:\\Windows\\System32\\GroupPolicy\\Machine\\registry.pol", "modified": "2026-10-30 22:41" }
+  ],
+  "pathTests": [
+    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\profiles", "reachable": true },
+    { "area": "Profiles", "value": "VHDLocations", "path": "\\\\fin-fs01\\fslogix$\\profiles", "reachable": false },
+    { "area": "ODFC", "value": "VHDLocations", "path": "\\\\finstorage01.file.core.windows.net\\odfc", "reachable": true }
+  ],
+  "gpResult": null
+}

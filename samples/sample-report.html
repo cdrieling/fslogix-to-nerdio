@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSLogix to Nerdio - AVD-FIN-03</title>
+<style>
+:root{
+  --bg:#f7f7f8; --card:#fff; --ink:#15171a; --muted:#5c6470; --line:#e2e5ea;
+  --accent:#2d5bd7; --warn-bg:#fff6e5; --warn-line:#e0a325; --warn-ink:#6b4a00;
+  --gray-bg:#f0f1f3; --code-bg:#f4f5f7; --ok:#1f7a4d;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121417; --card:#191c21; --ink:#e8eaed; --muted:#9aa3af; --line:#2a2f37;
+    --accent:#86a8ff; --warn-bg:#2d2411; --warn-line:#b5861f; --warn-ink:#f0d9a4;
+    --gray-bg:#20242b; --code-bg:#15181d; --ok:#5fd199;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;padding:0 16px 64px;background:var(--bg);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:1100px;margin:0 auto}
+header{padding:40px 0 20px;border-bottom:1px solid var(--line);margin-bottom:28px}
+h1{font-size:27px;line-height:1.2;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:20px;margin:40px 0 4px;letter-spacing:-.01em}
+h3{font-size:15px;margin:26px 0 8px}
+.sub{color:var(--muted);margin:0}
+.facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.fact{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 14px;min-width:120px}
+.fact b{display:block;font-size:21px;font-weight:600;line-height:1.2}
+.fact span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+nav{margin:0 0 8px;font-size:14px}
+nav a{color:var(--accent);text-decoration:none;margin-right:16px}
+nav a:hover{text-decoration:underline}
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px 20px;margin:14px 0}
+p.lead{color:var(--muted);margin:4px 0 14px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;
+  letter-spacing:.04em;border-bottom:1px solid var(--line);padding:0 10px 7px 0}
+td{border-bottom:1px solid var(--line);padding:9px 10px 9px 0;vertical-align:top}
+td:last-child,th:last-child{padding-right:0}
+tr.policy td{background:var(--warn-bg)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{background:var(--code-bg);border-radius:4px;padding:1px 5px;font-size:13px;overflow-wrap:anywhere}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:9px;padding:14px;
+  overflow:auto;font-size:13px;line-height:1.5;margin:0}
+.val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.note{color:var(--muted);font-size:13px;display:block;margin-top:3px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+  border-radius:5px;padding:2px 7px;white-space:nowrap}
+.tag-field{background:rgba(45,91,215,.13);color:var(--accent)}
+.tag-registry{background:var(--gray-bg);color:var(--muted)}
+.tag-editor{background:var(--gray-bg);color:var(--muted)}
+.tag-policy{background:rgba(224,163,37,.2);color:var(--warn-ink)}
+.finding{border-left:3px solid var(--line);padding:2px 0 2px 14px;margin:16px 0}
+.finding.warn{border-left-color:var(--warn-line)}
+.finding.unmanaged{border-left-color:var(--muted)}
+.finding b{display:block;margin-bottom:2px}
+.finding p{margin:0;color:var(--muted);font-size:14px}
+.copybar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px}
+button.copy{font:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--line);
+  border-radius:7px;padding:5px 12px;cursor:pointer}
+button.copy:hover{border-color:var(--accent);color:var(--accent)}
+ol.steps{padding-left:20px} ol.steps li{margin:9px 0}
+footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+a{color:var(--accent)}
+@media print{
+  body{background:#fff;padding:0}
+  .card{break-inside:avoid;border-color:#ccc}
+  button.copy{display:none}
+  nav{display:none}
+  tr.policy td{background:#fff}
+}
+</style>
+</head><body><div class="wrap">
+<header>
+<h1>FSLogix configuration of <code>AVD-FIN-03</code></h1>
+<p class="sub">captured 2026-11-17 10:14:03 +01:00  &middot;  FSLogix 2.9.8884.27471  &middot;  Microsoft Windows Server 2022 Datacenter (build 20348)  &middot;  Entra ID hybrid joined</p>
+<div class="facts">
+<div class="fact"><b>33</b><span>values found</span></div>
+<div class="fact"><b>5</b><span>named NME fields</span></div>
+<div class="fact"><b>26</b><span>registry lines</span></div>
+<div class="fact"><b>5</b><span>need a decision</span></div>
+</div></header>
+<nav><a href="#howto">How to rebuild</a><a href="#map">Setting map</a><a href="#paste">Paste blocks</a><a href="#findings">Findings</a><a href="#extras">Groups &amp; files</a></nav>
+<h2 id="howto">How to rebuild this in Nerdio Manager</h2>
+<div class="card"><ol class="steps">
+<li>Create the profile: <b>Cloud Desktops &gt; Azure Virtual Desktop &gt; Host Pool Profiles</b>, then <b>New profile &gt; FSLogix</b>, and in the <b>FSLogix Profiles storage</b> area select <b>Add</b>. (<a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">help centre</a>)</li>
+<li>Fill the named fields from the <a href="#map">setting map</a> below -- name, version, Cloud Cache, the Entra ID and exclusion checkboxes, and the profile path.</li>
+<li>Open <b>FSLogix Registry Options</b>. In <b>All settings</b> you can search a setting by its registry name and type the value; in <b>Advanced</b> you paste lines in the form <code>"ProfileType"=dword:00000003</code>. The <a href="#paste">paste blocks</a> below are already in that form. (<a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124371716109-FSLogix-Identity-Roaming-for-Credentials-and-Tokens">help centre</a>)</li>
+<li>Repeat for the Office container if this host has one, and tick <b>Manage App Service settings</b> / <b>Manage Log settings</b> if those blocks are not empty.</li>
+<li>Assign it: per host pool under <b>Settings &gt; FSLogix</b>, or as the environment default under <b>System &gt; Settings &gt; Integrations</b>. Per-pool settings only reach newly created or re-imaged hosts. (<a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124330262925-FSLogix-per-host-pool-customization">help centre</a>)</li>
+<li>Work through the <a href="#findings">findings</a> before you call it done -- Group Policy, include lists and App Masking are the three that silently undo the rest.</li>
+</ol></div>
+<h2 id="map">Setting map</h2>
+<p class="lead">Every value found on this host, and what it becomes in Nerdio Manager. Rows on a coloured background come from a Policies key.</p>
+<div class="card">
+<h3>Profile Container <span class="muted">&mdash; FSLogix Registry Options</span></h3>
+<p class="lead">The profile container itself. In NME everything in this table that is not a named field is entered under FSLogix Registry Options.</p>
+<table><thead><tr><th style="width:24%">Setting</th><th style="width:26%">Value on this host</th><th style="width:14%">In Nerdio</th><th>Note</th></tr></thead><tbody>
+<tr><td><code>AccessNetworkAsComputerObject</code><span class="note">DWord</span></td><td class="val">1<span class="note">computer object</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Required for Azure Files with Entra ID Kerberos. NME also has a checkbox, &quot;Configure session hosts registry for Entra ID joined storage&quot; -- use the checkbox and verify this value afterwards instead of setting both by hand. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124360018445-Use-Azure-Files-with-Entra-ID-joined-method-for-AVD">docs</a></td></tr>
+<tr><td><code>DeleteLocalProfileWhenVHDShouldApply</code><span class="note">DWord</span></td><td class="val">1<span class="note">delete local profile</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Deletes a local profile when a container should have applied. Destructive on the host, and the usual cure for &quot;temp profile&quot; symptoms on pooled hosts. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>Enabled</code><span class="note">DWord</span></td><td class="val">1<span class="note">enabled</span></td><td><span class="tag tag-field">field</span><span class="note">Enable FSLogix profiles</span></td><td>Per host pool: Settings &gt; FSLogix &gt; Enable FSLogix profiles. NME installs the agent on new or re-imaged hosts when this is on. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124330262925-FSLogix-per-host-pool-customization">docs</a></td></tr>
+<tr><td><code>FlipFlopProfileDirectoryName</code><span class="note">DWord</span></td><td class="val">1<span class="note">username_SID</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Folder naming on the share: username_SID instead of SID_username. Changing it orphans every existing container -- keep whatever the share already uses. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>IsDynamic</code><span class="note">DWord</span></td><td class="val">1<span class="note">dynamic</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Dynamically expanding container. Off means the full size is allocated on the share immediately. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>LockedRetryCount</code><span class="note">DWord</span></td><td class="val">3</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Retries when the container is locked by another host. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>LockedRetryInterval</code><span class="note">DWord</span></td><td class="val">15</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Seconds between those retries. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>PreventLoginWithFailure</code><span class="note">DWord</span></td><td class="val">1<span class="note">block sign-in</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Blocks sign-in when the container fails. Together with the exclude groups this decides whether an admin can still get on the host. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124309756429-Troubleshoot-Unable-to-Sign-In-to-Session-Host-VMs-as-Local-Administrator">docs</a></td></tr>
+<tr><td><code>PreventLoginWithTempProfile</code><span class="note">DWord</span></td><td class="val">1<span class="note">block temp profile</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Blocks sign-in with a temporary profile. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124309756429-Troubleshoot-Unable-to-Sign-In-to-Session-Host-VMs-as-Local-Administrator">docs</a></td></tr>
+<tr><td><code>ProfileType</code><span class="note">DWord</span></td><td class="val">0<span class="note">normal, single session</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Concurrent access mode. Anything but 0 needs a deliberate decision -- check it against the host pool type before copying it. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>RedirXMLSourceFolder</code><span class="note">String</span></td><td class="val">\\fin-fs01\fslogix$\config</td><td><span class="tag tag-field">field</span><span class="note">Redirections</span></td><td>NME keeps one redirections.xml with the profile and distributes it; the folder path here is replaced by that mechanism. The current file is reproduced further down. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>RoamIdentity</code><span class="note">DWord</span></td><td class="val">1<span class="note">on</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Identity roaming for credentials and tokens. The help centre documents it as an Advanced line: &quot;RoamIdentity&quot;=dword:00000001. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/26124371716109-FSLogix-Identity-Roaming-for-Credentials-and-Tokens">docs</a></td></tr>
+<tr><td><code>SetTempToLocalPath</code><span class="note">DWord</span></td><td class="val">3<span class="note">TEMP, TMP and INetCache</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Redirects TEMP/TMP and the INetCache out of the container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>SizeInMBs</code><span class="note">DWord</span></td><td class="val">30000</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Maximum container size. FSLogix default is 30000 (about 30 GB). <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>VHDLocations</code><span class="note">MultiString</span></td><td class="val">\\finstorage01.file.core.windows.net\profiles
+\\fin-fs01\fslogix$\profiles</td><td><span class="tag tag-field">field</span><span class="note">FSLogix Profiles path (VHDLocation)</span></td><td>Pick the Azure Files share from the drop-down or type a UNC path. Up to four, and the order is kept. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>VolumeType</code><span class="note">String</span></td><td class="val">vhdx</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>VHDX is the current default; VHD only for legacy shares. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>VolumeWaitTimeMs</code><span class="note">QWord</span></td><td class="val">20000</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td><span class="muted">Not in the catalogue. It is carried over unchanged in the paste block below; check it against the Microsoft reference.</span></td></tr>
+<tr><td><code>ZzCustomerLegacyFlag</code><span class="note">DWord</span></td><td class="val">1</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td><span class="muted">Not in the catalogue. It is carried over unchanged in the paste block below; check it against the Microsoft reference.</span></td></tr>
+<tr class="policy"><td><code>SizeInMBs</code><span class="note">DWord</span></td><td class="val">50000</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span> <span class="tag tag-policy">from GPO</span></td><td>Maximum container size. FSLogix default is 30000 (about 30 GB). <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+</tbody></table></div>
+<div class="card">
+<h3>Office Container (ODFC) <span class="muted">&mdash; FSLogix Office Container Registry Options</span></h3>
+<p class="lead">The Office container. NME only shows this section once &quot;Configure Office Container to redirect Microsoft Office user data&quot; is toggled on.</p>
+<table><thead><tr><th style="width:24%">Setting</th><th style="width:26%">Value on this host</th><th style="width:14%">In Nerdio</th><th>Note</th></tr></thead><tbody>
+<tr><td><code>Enabled</code><span class="note">DWord</span></td><td class="val">1<span class="note">enabled</span></td><td><span class="tag tag-field">field</span><span class="note">Configure Office Container to redirect Microsoft Office user data</span></td><td>The toggle that reveals the Office container section in NME. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>IncludeOfficeActivation</code><span class="note">DWord</span></td><td class="val">1<span class="note">included</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Which Office data lands in the Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>IncludeOneDrive</code><span class="note">DWord</span></td><td class="val">0<span class="note">excluded</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Which Office data lands in the Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>IncludeOutlook</code><span class="note">DWord</span></td><td class="val">1<span class="note">included</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Which Office data lands in the Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>IncludeTeams</code><span class="note">DWord</span></td><td class="val">1<span class="note">included</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Which Office data lands in the Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>IsDynamic</code><span class="note">DWord</span></td><td class="val">1<span class="note">dynamic</span></td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Dynamically expanding Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>NumSessionVHDsToKeep</code><span class="note">DWord</span></td><td class="val">2</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>How many per-session Office containers are kept. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>SizeInMBs</code><span class="note">DWord</span></td><td class="val">30000</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>Maximum Office container size. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+<tr><td><code>VHDLocations</code><span class="note">String</span></td><td class="val">\\finstorage01.file.core.windows.net\odfc</td><td><span class="tag tag-field">field</span><span class="note">FSLogix Office Container path (VHDLocation)</span></td><td>Can and often should be a different share than the profile container. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>VolumeType</code><span class="note">String</span></td><td class="val">vhdx</td><td><span class="tag tag-registry">registry</span><span class="note">Registry Options</span></td><td>VHDX or VHD for the Office container. <a href="https://learn.microsoft.com/fslogix/reference-configuration-settings">docs</a></td></tr>
+</tbody></table></div>
+<div class="card">
+<h3>App Services <span class="muted">&mdash; Manage App Service settings</span></h3>
+<p class="lead">The FSLogix application services. In NME these sit behind the &quot;Manage App Service settings&quot; checkbox of the FSLogix profile.</p>
+<table><thead><tr><th style="width:24%">Setting</th><th style="width:26%">Value on this host</th><th style="width:14%">In Nerdio</th><th>Note</th></tr></thead><tbody>
+<tr><td><code>CleanupInvalidSessions</code><span class="note">DWord</span></td><td class="val">1<span class="note">on</span></td><td><span class="tag tag-editor">editor</span><span class="note">Manage App Service settings</span></td><td>Cleans up sessions left behind by a crash. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+</tbody></table></div>
+<div class="card">
+<h3>Logging <span class="muted">&mdash; Manage Log settings</span></h3>
+<p class="lead">Log destinations and levels. In NME these sit behind the &quot;Manage Log settings&quot; checkbox of the FSLogix profile.</p>
+<table><thead><tr><th style="width:24%">Setting</th><th style="width:26%">Value on this host</th><th style="width:14%">In Nerdio</th><th>Note</th></tr></thead><tbody>
+<tr><td><code>LogDir</code><span class="note">String</span></td><td class="val">\\fin-fs01\fslogix$\logs</td><td><span class="tag tag-editor">editor</span><span class="note">Manage Log settings</span></td><td>Log destination. A UNC path here means every host writes to one share -- check it still exists in the target environment. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>LogFileKeepingPeriod</code><span class="note">DWord</span></td><td class="val">7</td><td><span class="tag tag-editor">editor</span><span class="note">Manage Log settings</span></td><td>Days of logs kept on the host. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+<tr><td><code>LoggingEnabled</code><span class="note">DWord</span></td><td class="val">2</td><td><span class="tag tag-editor">editor</span><span class="note">Manage Log settings</span></td><td>Global logging switch. <a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">docs</a></td></tr>
+</tbody></table></div>
+<h2 id="paste">Paste blocks</h2>
+<p class="lead">These are the lines for NME's <b>Advanced</b> edit mode, in the documented format (<code>"ValueName"=dword:ValueData</code> and <code>"ValueName"="ValueData"</code>). Values that NME has a named field for are deliberately not in here -- set those in the field, not twice. (<a href="https://nmehelp.getnerdio.com/hc/en-us/articles/25499417371661-FSLogix-settings-and-configuration">help centre</a>)</p>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">Profile Container <span class="muted">&mdash; FSLogix Registry Options</span></h3><button class="copy" data-target="block1">Copy 14 line(s)</button></div>
+<pre id="block1">&quot;AccessNetworkAsComputerObject&quot;=dword:00000001
+&quot;DeleteLocalProfileWhenVHDShouldApply&quot;=dword:00000001
+&quot;FlipFlopProfileDirectoryName&quot;=dword:00000001
+&quot;IsDynamic&quot;=dword:00000001
+&quot;LockedRetryCount&quot;=dword:00000003
+&quot;LockedRetryInterval&quot;=dword:0000000f
+&quot;PreventLoginWithFailure&quot;=dword:00000001
+&quot;PreventLoginWithTempProfile&quot;=dword:00000001
+&quot;ProfileType&quot;=dword:00000000
+&quot;RoamIdentity&quot;=dword:00000001
+&quot;SetTempToLocalPath&quot;=dword:00000003
+&quot;SizeInMBs&quot;=dword:00007530
+&quot;VolumeType&quot;=&quot;vhdx&quot;
+&quot;ZzCustomerLegacyFlag&quot;=dword:00000001</pre>
+</div>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">Profile Container <span class="muted">&mdash; from the Policies key</span></h3><button class="copy" data-target="block2">Copy 1 line(s)</button></div>
+<p class="lead">These come from <code>HKLM\SOFTWARE\Policies\FSLogix</code>, so Group Policy or Intune puts them there and will put them back. Do not paste them next to the block above without deciding which value wins &mdash; where a name appears in both, the findings say so.</p>
+<pre id="block2">&quot;SizeInMBs&quot;=dword:0000c350</pre>
+</div>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">Office Container (ODFC) <span class="muted">&mdash; FSLogix Office Container Registry Options</span></h3><button class="copy" data-target="block3">Copy 8 line(s)</button></div>
+<pre id="block3">&quot;IncludeOfficeActivation&quot;=dword:00000001
+&quot;IncludeOneDrive&quot;=dword:00000000
+&quot;IncludeOutlook&quot;=dword:00000001
+&quot;IncludeTeams&quot;=dword:00000001
+&quot;IsDynamic&quot;=dword:00000001
+&quot;NumSessionVHDsToKeep&quot;=dword:00000002
+&quot;SizeInMBs&quot;=dword:00007530
+&quot;VolumeType&quot;=&quot;vhdx&quot;</pre>
+</div>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">App Services <span class="muted">&mdash; Manage App Service settings</span></h3><button class="copy" data-target="block4">Copy 1 line(s)</button></div>
+<pre id="block4">&quot;CleanupInvalidSessions&quot;=dword:00000001</pre>
+</div>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">Logging <span class="muted">&mdash; Manage Log settings</span></h3><button class="copy" data-target="block5">Copy 3 line(s)</button></div>
+<pre id="block5">&quot;LogDir&quot;=&quot;\\fin-fs01\fslogix$\logs&quot;
+&quot;LogFileKeepingPeriod&quot;=dword:00000007
+&quot;LoggingEnabled&quot;=dword:00000002</pre>
+</div>
+<h2 id="findings">Findings</h2>
+<div class="card">
+<div class="finding warn"><b>A Policies key exists for Profile Container</b><p>HKLM\SOFTWARE\Policies\FSLogix\Profiles is present on this host. Values there come from Group Policy or Intune and are re-applied on every policy refresh -- they will overwrite what Nerdio Manager writes. They are listed separately below; decide per value which configuration you want to keep before you paste anything.</p></div>
+<div class="finding warn"><b>Profile Container\SizeInMBs is set twice, with different values</b><p>The product key says &quot;30000&quot;, the Policies key says &quot;50000&quot;. Only one of them is what the environment actually runs on -- settle that before rebuilding the profile in Nerdio Manager, otherwise the value you type there is the one that loses.</p></div>
+<div class="finding warn"><b>Group Policy on this host mentions FSLogix</b><p>1 policy file(s) under %WINDIR%\System32\GroupPolicy reference FSLogix: C:\Windows\System32\GroupPolicy\Machine\registry.pol. FSLogix's own ADMX writes into the same registry keys the product uses, so a GPO-set value looks exactly like a locally set one -- and it wins after every policy refresh. The help centre is explicit: session hosts should not receive conflicting FSLogix configurations from GPOs.</p></div>
+<div class="finding warn"><b>&quot;FSLogix Profile Include List&quot; has 1 member(s)</b><p>Members: FIN\AVD-Users. An include list means FSLogix applies to those members only. Nerdio Manager does not manage include-list membership -- reproduce it with a scripted action, or the containers will apply to everyone in the new environment.</p></div>
+<div class="finding warn"><b>Path not reachable from this host: \\fin-fs01\fslogix$\profiles</b><p>Configured as Profiles\VHDLocations. Checked from this session host at capture time; it may still be correct for the target environment.</p></div>
+<div class="finding unmanaged"><b>3 App Masking rule file(s) on this host</b><p>Nerdio Manager configures the FSLogix profile and Office containers; App Masking rule sets are not part of that configuration. Carry them over with a scripted action or your image build. Files: SAP-GUI.fxa, SAP-GUI.fxr, Visio.fxr</p></div>
+<div class="finding info"><b>Profiles\VolumeWaitTimeMs cannot be typed into the Advanced editor</b><p>The value is of type QWord. Enter it under &quot;All settings&quot;, or reproduce it with a scripted action. Current value: 20000</p></div>
+<div class="finding info"><b>redirections.xml is in use</b><p>The host reads its redirections from \\fin-fs01\fslogix$\config\redirections.xml. In Nerdio Manager this becomes the &quot;Redirections&quot; toggle on the FSLogix profile; the file content is reproduced at the end of this report so it can be pasted there.</p></div>
+<div class="finding info"><b>&quot;FSLogix Profile Exclude List&quot; has 2 member(s)</b><p>Members: AVD-FIN-03\Administrator, FIN\AVD-Admins. Nerdio Manager has two checkboxes for the common cases -- &quot;Exclude the local admin accounts from FSLogix&quot; and &quot;Exclude domain accounts from FSLogix&quot; (which takes the domain in a box below). Anything else in this group has to be reproduced by hand or with a scripted action.</p></div>
+</div>
+<h2 id="extras">Groups, redirections and rule files</h2>
+<div class="card"><h3 style="margin-top:0">FSLogix local groups</h3>
+<table><thead><tr><th style="width:34%">Group</th><th>Members</th></tr></thead><tbody>
+<tr><td><code>FSLogix Profile Include List</code></td><td>FIN\AVD-Users</td></tr>
+<tr><td><code>FSLogix Profile Exclude List</code></td><td>AVD-FIN-03\Administrator, FIN\AVD-Admins</td></tr>
+<tr><td><code>FSLogix ODFC Include List</code></td><td><span class="muted">empty</span></td></tr>
+<tr><td><code>FSLogix ODFC Exclude List</code></td><td><span class="muted">empty</span></td></tr>
+</tbody></table>
+</div>
+<div class="card">
+<div class="copybar"><h3 style="margin:0">redirections.xml <span class="muted">&mdash; Redirections toggle</span></h3><button class="copy" data-target="redirxml">Copy</button></div>
+<p class="lead"><code>\\fin-fs01\fslogix$\config\redirections.xml</code></p>
+<pre id="redirxml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;FrxProfileFolderRedirection ExcludeCommonFolders=&quot;0&quot;&gt;
+  &lt;Excludes&gt;
+    &lt;Exclude Copy=&quot;0&quot;&gt;AppData\Local\Temp&lt;/Exclude&gt;
+    &lt;Exclude Copy=&quot;0&quot;&gt;AppData\Local\Google\Chrome\User Data\Default\Cache&lt;/Exclude&gt;
+    &lt;Exclude Copy=&quot;0&quot;&gt;AppData\Local\Microsoft\Edge\User Data\Default\Cache&lt;/Exclude&gt;
+  &lt;/Excludes&gt;
+  &lt;Includes&gt;
+    &lt;Include Copy=&quot;3&quot;&gt;AppData\Local\Microsoft\Teams\Backgrounds&lt;/Include&gt;
+  &lt;/Includes&gt;
+&lt;/FrxProfileFolderRedirection&gt;
+</pre>
+</div>
+<div class="card"><h3 style="margin-top:0">App Masking rule files <span class="muted">&mdash; not managed by Nerdio Manager</span></h3>
+<table><thead><tr><th style="width:50%">File</th><th>Size</th><th>Modified</th></tr></thead><tbody>
+<tr><td><code>SAP-GUI.fxa</code></td><td>2.048 bytes</td><td>2026-09-02 11:20</td></tr>
+<tr><td><code>SAP-GUI.fxr</code></td><td>18.432 bytes</td><td>2026-09-02 11:20</td></tr>
+<tr><td><code>Visio.fxr</code></td><td>9.216 bytes</td><td>2026-05-14 08:03</td></tr>
+</tbody></table></div>
+<div class="card"><h3 style="margin-top:0">FSLogix services</h3><table><thead><tr><th style="width:34%">Service</th><th>Status</th><th>Start type</th></tr></thead><tbody>
+<tr><td><code>frxsvc</code></td><td>Running</td><td>Automatic</td></tr>
+<tr><td><code>frxccds</code></td><td>Stopped</td><td>Manual</td></tr>
+<tr><td><code>frxdrv</code></td><td>Running</td><td>System</td></tr>
+</tbody></table></div>
+<footer>Generated by <b>fslogix-to-nerdio</b> 1.0.0 on 2026-11-17 10:14:03 +01:00. Read-only: nothing on this host was changed. Navigation paths and field names are taken from the Nerdio help centre; verify them against your own version. Not affiliated with, or endorsed by, Nerdio or Microsoft.</footer>
+</div>
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest ? e.target.closest('button.copy') : null;
+  if (!b) return;
+  var el = document.getElementById(b.getAttribute('data-target'));
+  if (!el) return;
+  var text = el.innerText;
+  var done = function () { var o = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = o; }, 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+  } else { fallback(text, done); }
+  function fallback(t, cb) {
+    var ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); cb(); } catch (err) { }
+    document.body.removeChild(ta);
+  }
+});
+</script>
+</body></html>

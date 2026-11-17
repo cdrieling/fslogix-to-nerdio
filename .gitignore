@@ -1,0 +1,6 @@
+# Generated reports and captures from real hosts — they hold customer data.
+fslogix-nerdio-*.html
+*.capture.json
+report.html
+
+.DS_Store
