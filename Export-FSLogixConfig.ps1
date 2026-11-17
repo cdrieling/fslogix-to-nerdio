@@ -1585,3 +1585,7 @@ Write-Host ("Report written to {0}" -f $OutputPath)
 if (-not $NoLaunch -and (Test-IsWindows)) {
     try { Invoke-Item -LiteralPath $OutputPath } catch { }
 }
+
+# --- end of Export-FSLogixConfig.ps1 -------------------------------------------------
+# If this line is not the last line of your copy, the file was truncated in transit and
+# PowerShell will fail to parse it. Check with: Get-Content .\Export-FSLogixConfig.ps1 -Tail 1
