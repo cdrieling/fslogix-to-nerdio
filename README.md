@@ -74,6 +74,7 @@ session hosts should not receive conflicting FSLogix configurations from GPOs.
 | `-OutputPath <file>` | where the HTML goes (default: `.\fslogix-nerdio-<host>-<stamp>.html`) |
 | `-SaveJson <file>` | also write the raw capture, to render elsewhere or diff two hosts |
 | `-FromJson <file>` | render from such a capture instead of reading the registry — works on any OS |
+| `-FromReg <file>[,<file>…]` | render from one or more regedit exports (`.reg`) — for when the customer sends an export instead of running the script; works on any OS, see below |
 | `-CatalogPath <file>` | override the annotation catalogue, see [docs/catalog.md](docs/catalog.md) |
 | `-TestPaths` | probe the profile and Office container shares (see below) |
 | `-IncludeGpResult` | add the applied GPO list from `gpresult /scope computer /r` — computer-scope policy data normally needs an **elevated** run; when it is refused, the report says so instead of leaving the section out |
@@ -103,6 +104,29 @@ Capture on the host, read the report anywhere:
 ```bash
 pwsh ./Export-FSLogixConfig.ps1 -FromJson ./avd-fin-03.json -OutputPath ./report.html
 ```
+
+**When the customer sends a registry export instead.** Some customers will not run a script on
+a session host but will happily send a `.reg` file. Ask for these two — the second one fails
+with "unable to find the specified registry key" when no policy sets FSLogix, which is itself
+the answer:
+
+```cmd
+reg export "HKLM\SOFTWARE\FSLogix" fslogix.reg
+reg export "HKLM\SOFTWARE\Policies\FSLogix" fslogix-policies.reg
+```
+
+```bash
+pwsh ./Export-FSLogixConfig.ps1 -FromReg ./fslogix.reg,./fslogix-policies.reg -OutputPath ./report.html
+```
+
+The settings map and the paste blocks come out the same as from a capture. Everything an export
+cannot carry — agent version, services, join state, the include/exclude groups,
+`redirections.xml`, App Masking rules, policy files — is marked *skipped* in Coverage and named
+in a finding, so the report says *unknown* there, never *absent*. A key counts as absent only
+when the export covers its parent key and the key is not in it. The `Sessions` subkeys, which
+hold signed-in users' names and container paths, are counted as evidence that FSLogix was
+running and otherwise left out of both the report and the capture. Add `-SaveJson` to keep
+the result as an ordinary capture.
 
 ## What it does not do
 
@@ -140,7 +164,8 @@ It lives in the script so the tool stays a single file to copy onto a locked-dow
 
 ## Status
 
-v1.1.3, run on two real hosts.
+v1.2.0, run on two real hosts. `-FromReg` (new in 1.2.0) has been run against one real
+customer export, on macOS with PowerShell 7 — not yet on Windows PowerShell 5.1.
 
 | | |
 |---|---|
@@ -164,7 +189,11 @@ The rendering path is exercised against `samples/sample-capture.json`, which car
 awkward cases on purpose: a Policies key contradicting the product key, a `QWord` the Advanced
 editor cannot express, a value outside the catalogue, an empty multi-string, a multi-string
 path list, an unreachable share, App Masking rules, a narrowed include list, an `Everyone`
-include list and a refused collector.
+include list and a refused collector. The import path has its own pair,
+`samples/sample-export.reg` and `samples/sample-export-policies.reg`, written the way regedit
+writes them (UTF-16 with BOM, wrapped hex lines): multi-string, `QWord` and `ExpandString`
+values, escaped quotes, a live `Sessions` subkey, a key deletion, a parent key that makes a
+missing key count as absent, and a policy value contradicting the product key.
 
 **One limit worth knowing:** the Group Policy file scan only sees *local* Group Policy. A
 domain GPO or an Intune policy writes straight into the registry and leaves no file on the

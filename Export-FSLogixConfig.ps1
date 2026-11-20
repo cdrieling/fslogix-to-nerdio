@@ -31,6 +31,14 @@
     Render the report from a capture written earlier by -SaveJson instead of reading the
     local registry. Works on any operating system; nothing is collected.
 
+.PARAMETER FromReg
+    Render the report from one or more regedit exports (.reg) instead of reading the local
+    registry -- for when the customer sends an export rather than running the script. Works
+    on any operating system. An export carries the FSLogix registry keys and nothing around
+    them (agent, groups, policy files), so the report marks everything else as not collected
+    instead of absent. Export HKLM\SOFTWARE\FSLogix and, if it exists,
+    HKLM\SOFTWARE\Policies\FSLogix. Combine with -SaveJson to keep the capture.
+
 .PARAMETER CatalogPath
     A JSON file overriding the built-in annotation catalogue. See docs/catalog.md.
 
@@ -54,6 +62,9 @@
 .EXAMPLE
     pwsh ./Export-FSLogixConfig.ps1 -FromJson ./samples/sample-capture.json -OutputPath ./report.html
 
+.EXAMPLE
+    pwsh ./Export-FSLogixConfig.ps1 -FromReg ./fslogix.reg,./fslogix-policies.reg -OutputPath ./report.html
+
 .NOTES
     Copyright (c) 2026 Christian T. Drieling. Licensed under the Apache License 2.0.
     Not affiliated with, or endorsed by, Nerdio or Microsoft.
@@ -63,6 +74,7 @@ param(
     [string] $OutputPath,
     [string] $SaveJson,
     [string] $FromJson,
+    [string[]] $FromReg,
     [string] $CatalogPath,
     [switch] $TestPaths,
     [switch] $IncludeGpResult,
@@ -71,7 +83,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script:SchemaVersion  = 'fslogix-to-nerdio/1'
-$script:ToolVersion    = '1.1.3'
+$script:ToolVersion    = '1.2.0'
 
 # What each collector managed to do. The point of this list is that "not found" and "not
 # allowed to look" must never render the same way -- especially when the script runs as an
@@ -393,6 +405,21 @@ function Add-CollectorStatus {
     $script:Collectors += [pscustomobject] [ordered]@{
         name = $Name; status = $Status; detail = $Detail; source = $Source
     }
+}
+
+function Get-CollectorStatus {
+    # The status a collector recorded, or $null if it is not in the capture at all (older
+    # captures, or a collector this capture never had).
+    param($Capture, [string] $Name)
+    foreach ($c in (ConvertTo-Array (Get-Prop $Capture 'collectors'))) {
+        if ([string] $c.name -eq $Name) { return [string] $c.status }
+    }
+    return $null
+}
+
+function Test-FromRegExport {
+    param($Capture)
+    return ([string] (Get-Prop (Get-Prop $Capture 'source') 'kind') -eq 'reg')
 }
 
 function Get-ErrorKind {
@@ -876,6 +903,268 @@ function Get-Capture {
 }
 
 # --------------------------------------------------------------------------------------
+# Import from a regedit export (-FromReg)
+#
+# A customer who will not run a script on a session host will often still send a .reg file.
+# That carries the registry half of a capture and nothing around it -- no agent version, no
+# groups, no policy files -- so every collector it cannot stand in for is recorded as
+# 'skipped', and the report treats skipped as unknown, never as absent.
+# --------------------------------------------------------------------------------------
+function Read-RegFileText {
+    # regedit writes UTF-16LE with a BOM ("Version 5.00"); REGEDIT4 and hand-edited files
+    # are ANSI or UTF-8. Decode by BOM, then by the zero bytes UTF-16 leaves, then strictly
+    # as UTF-8, and only then as Latin-1 -- which is the one that cannot fail.
+    param([string] $Path)
+    $b = [System.IO.File]::ReadAllBytes($Path)
+    if ($b.Length -ge 2 -and $b[0] -eq 0xFF -and $b[1] -eq 0xFE) { return [System.Text.Encoding]::Unicode.GetString($b, 2, $b.Length - 2) }
+    if ($b.Length -ge 2 -and $b[0] -eq 0xFE -and $b[1] -eq 0xFF) { return [System.Text.Encoding]::BigEndianUnicode.GetString($b, 2, $b.Length - 2) }
+    if ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { return [System.Text.Encoding]::UTF8.GetString($b, 3, $b.Length - 3) }
+    if ($b.Length -ge 4 -and $b[1] -eq 0 -and $b[3] -eq 0) { return [System.Text.Encoding]::Unicode.GetString($b) }
+    try {
+        return (New-Object System.Text.UTF8Encoding($false, $true)).GetString($b)
+    } catch {
+        return [System.Text.Encoding]::GetEncoding(28591).GetString($b)
+    }
+}
+
+function ConvertFrom-RegHex {
+    param([string] $Text)
+    $t = $Text -replace '[\s\\]', ''
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    foreach ($h in $t.Split(',')) {
+        if ($h) { $bytes.Add([Convert]::ToByte($h, 16)) }
+    }
+    return ,($bytes.ToArray())
+}
+
+function ConvertFrom-RegString {
+    # The quoted form regedit writes: backslash and double quote are escaped, nothing else.
+    # Returns the unescaped text and how many characters of the input it consumed.
+    param([string] $Text)
+    $sb = New-Object System.Text.StringBuilder
+    $i = 1
+    while ($i -lt $Text.Length) {
+        $c = $Text[$i]
+        if ($c -eq '\' -and $i + 1 -lt $Text.Length) { [void] $sb.Append($Text[$i + 1]); $i += 2; continue }
+        if ($c -eq '"') { return [pscustomobject] @{ text = $sb.ToString(); length = $i + 1 } }
+        [void] $sb.Append($c); $i++
+    }
+    return $null   # no closing quote
+}
+
+function ConvertFrom-RegValue {
+    # The right-hand side of a value line -> the same kind/data/display shape that
+    # Read-RegistryArea produces from the live registry. $null for a deletion or garbage.
+    param([string] $Text)
+    $t = $Text.Trim()
+    if ($t -eq '-') { return $null }
+
+    if ($t.StartsWith('"')) {
+        $s = ConvertFrom-RegString $t
+        if (-not $s) { return $null }
+        return [pscustomobject] [ordered]@{ kind = 'String'; data = $s.text; display = $s.text }
+    }
+    if ($t -match '^dword:([0-9a-fA-F]{1,8})$') {
+        $n = [int64] [Convert]::ToUInt32($Matches[1], 16)
+        return [pscustomobject] [ordered]@{ kind = 'DWord'; data = $n; display = [string] $n }
+    }
+    if ($t -match '^hex(?:\(([0-9a-fA-F]+)\))?:(.*)$') {
+        $type  = 3
+        if ($Matches[1]) { $type = [Convert]::ToInt32($Matches[1], 16) }
+        $bytes = ConvertFrom-RegHex $Matches[2]
+        $hex   = (($bytes | ForEach-Object { '{0:x2}' -f $_ }) -join ' ')
+        switch ($type) {
+            { $_ -eq 1 -or $_ -eq 2 } {
+                $s = [System.Text.Encoding]::Unicode.GetString($bytes).TrimEnd([char] 0)
+                $k = $(if ($type -eq 1) { 'String' } else { 'ExpandString' })
+                return [pscustomobject] [ordered]@{ kind = $k; data = $s; display = $s }
+            }
+            7 {
+                # Entries are NUL-separated and the list ends in a double NUL; the live
+                # registry hands back the entries only, so the empty tail is dropped here too.
+                $parts = [string[]] @([System.Text.Encoding]::Unicode.GetString($bytes).Split([char] 0) | Where-Object { $_ -ne '' })
+                return [pscustomobject] [ordered]@{ kind = 'MultiString'; data = $parts; display = ($parts -join "`n") }
+            }
+            4 {
+                if ($bytes.Length -lt 4) { break }
+                $n = [int64] [BitConverter]::ToUInt32($bytes, 0)
+                return [pscustomobject] [ordered]@{ kind = 'DWord'; data = $n; display = [string] $n }
+            }
+            11 {
+                if ($bytes.Length -lt 8) { break }
+                $n = [BitConverter]::ToUInt64($bytes, 0)
+                return [pscustomobject] [ordered]@{ kind = 'QWord'; data = $n; display = [string] $n }
+            }
+            3 { return [pscustomobject] [ordered]@{ kind = 'Binary'; data = $hex; display = $hex } }
+        }
+        return [pscustomobject] [ordered]@{ kind = 'Unknown'; data = $hex; display = $hex }
+    }
+    return $null
+}
+
+function ConvertTo-ShortHive {
+    param([string] $Path)
+    $p = $Path.Trim().TrimEnd('\')
+    $p = $p -replace '^HKEY_LOCAL_MACHINE(?=\\|$)', 'HKLM'
+    $p = $p -replace '^HKEY_CURRENT_USER(?=\\|$)', 'HKCU'
+    $p = $p -replace '^HKEY_USERS(?=\\|$)', 'HKU'
+    return $p
+}
+
+function Get-CaptureFromReg {
+    param([string[]] $Path)
+
+    # Every key the live collector would read, by its upper-case HKLM\ path.
+    $wanted = [ordered]@{}
+    foreach ($areaName in $script:Areas.Keys) {
+        foreach ($scope in 'product', 'policy') {
+            $prop = $(if ($scope -eq 'product') { 'ProductKey' } else { 'PolicyKey' })
+            $p = ([string] $script:Areas[$areaName][$prop]) -replace '^HKLM:', 'HKLM'
+            $wanted[$p.ToUpperInvariant()] = @{ area = $areaName; scope = $scope; path = $p }
+        }
+    }
+
+    $found    = @{}     # upper key -> ordered name -> value
+    $origin   = @{}     # upper key -> the file(s) it came from
+    $sections = New-Object System.Collections.Generic.List[string]
+    $sessions = 0
+    $files    = @()
+    $newest   = $null
+
+    foreach ($file in $Path) {
+        if (-not (Test-Path -LiteralPath $file)) { throw "Registry export not found: $file" }
+        $full = (Resolve-Path -LiteralPath $file).Path
+        $files += [System.IO.Path]::GetFileName($full)
+        $mtime = (Get-Item -LiteralPath $full).LastWriteTime
+        if (-not $newest -or $mtime -gt $newest) { $newest = $mtime }
+
+        $lines = (Read-RegFileText $full) -split "`r?`n"
+        $head  = [string] ($lines | Where-Object { $_.Trim() } | Select-Object -First 1)
+        if ($head.Trim() -notmatch '^(Windows Registry Editor Version 5\.00|REGEDIT4)$') {
+            throw ("{0} is not a registry export: the first line should read 'Windows Registry Editor Version 5.00'." -f $full)
+        }
+
+        # Long hex values are wrapped with a trailing backslash. Only hex values wrap, so a
+        # string that happens to end in a backslash (always followed by the closing quote
+        # anyway) is never mistaken for a continuation.
+        $logical = New-Object System.Collections.Generic.List[string]
+        $buf = $null
+        foreach ($l in $lines) {
+            if ($null -ne $buf) { $l = $buf + $l.Trim(); $buf = $null }
+            if ($l -match '=hex(\([0-9a-fA-F]+\))?:' -and $l.TrimEnd().EndsWith('\')) {
+                $buf = $l.TrimEnd().TrimEnd('\')
+                continue
+            }
+            $logical.Add($l)
+        }
+        if ($null -ne $buf) { $logical.Add($buf) }
+
+        $current = $null
+        foreach ($l in $logical) {
+            $t = $l.Trim()
+            if (-not $t -or $t.StartsWith(';')) { continue }
+            if ($t -match '^\[(-?)(.+)\]$') {
+                $current = $null
+                if ($Matches[1]) { continue }   # a key deletion, not configuration
+                $u = (ConvertTo-ShortHive $Matches[2]).ToUpperInvariant()
+                $sections.Add($u)
+                if ($wanted.Contains($u)) {
+                    $current = $u
+                    if (-not $found.ContainsKey($u)) { $found[$u] = [ordered]@{}; $origin[$u] = @() }
+                    if ($origin[$u] -notcontains $files[-1]) { $origin[$u] += $files[-1] }
+                } elseif ($u -match '^HKLM\\SOFTWARE\\(POLICIES\\)?FSLOGIX\\(PROFILES|ODFC)\\SESSIONS\\[^\\]+$') {
+                    # One per signed-in user: live state, with user names and container paths.
+                    # Counted as evidence that the agent ran, and otherwise left behind.
+                    $sessions++
+                }
+                continue
+            }
+            if (-not $current -or -not $t.StartsWith('"')) { continue }   # '@=' is the (Default) value
+            $n = ConvertFrom-RegString $t
+            if (-not $n) { continue }
+            $rest = $t.Substring($n.length).TrimStart()
+            if (-not $rest.StartsWith('=')) { continue }
+            $v = ConvertFrom-RegValue $rest.Substring(1)
+            if (-not $v -or -not $n.text) { continue }
+            $found[$current][$n.text] = [pscustomobject] [ordered]@{ name = $n.text; kind = $v.kind; data = $v.data; display = $v.display }
+        }
+    }
+
+    $fileList = ($files -join ', ')
+    $keys = @()
+    foreach ($u in $wanted.Keys) {
+        $w = $wanted[$u]
+        $label = ('Registry {0} ({1})' -f $w.path, $w.scope)
+        $key = [ordered]@{ area = $w.area; scope = $w.scope; path = $w.path; exists = $false; readable = $true; error = $null; values = @() }
+        if ($found.ContainsKey($u)) {
+            $vals = @($found[$u].Keys | Sort-Object | ForEach-Object { $found[$u][$_] })
+            $key.exists = $true
+            $key.values = $vals
+            Add-CollectorStatus -Name $label -Status $(if ($vals.Count -eq 0) { 'empty' } else { 'ok' }) -Detail ('{0} value(s)' -f $vals.Count) -Source ($origin[$u] -join ', ')
+        } else {
+            # regedit exports a key with everything below it. If a parent of this key was
+            # exported and this key is not in it, it does not exist; otherwise nobody looked.
+            $covered = $false
+            foreach ($s in $sections) { if ($u.StartsWith($s + '\')) { $covered = $true } }
+            if ($covered) {
+                Add-CollectorStatus -Name $label -Status 'absent' -Detail 'not in the export, although the export covers its parent key' -Source $fileList
+            } else {
+                $key.readable = $false
+                Add-CollectorStatus -Name $label -Status 'skipped' -Detail 'not in the registry export' -Source $fileList
+            }
+        }
+        $keys += [pscustomobject] $key
+    }
+
+    $redirFolder = $null
+    foreach ($k in $keys) {
+        if ($k.area -ne 'Profiles') { continue }
+        foreach ($v in (ConvertTo-Array $k.values)) {
+            if ($v.name -eq 'RedirXMLSourceFolder' -and $v.display) { $redirFolder = [string] $v.display }
+        }
+    }
+
+    $notInExport = 'not part of a registry export'
+    Add-CollectorStatus -Name 'FSLogix services'      -Status 'skipped' -Detail $notInExport -Source 'service control manager'
+    Add-CollectorStatus -Name 'FSLogix agent version' -Status 'skipped' -Detail $notInExport -Source 'frxsvc.exe'
+    Add-CollectorStatus -Name 'Operating system'      -Status 'skipped' -Detail $notInExport -Source 'Win32_OperatingSystem'
+    Add-CollectorStatus -Name 'Join state'            -Status 'skipped' -Detail $notInExport -Source 'dsregcmd.exe'
+    Add-CollectorStatus -Name 'FSLogix local groups'  -Status 'skipped' -Detail $notInExport -Source 'local groups'
+    if ($redirFolder) {
+        Add-CollectorStatus -Name 'redirections.xml' -Status 'skipped' -Detail ('RedirXMLSourceFolder points at {0}; a registry export cannot carry the file itself' -f $redirFolder) -Source $redirFolder
+    } else {
+        Add-CollectorStatus -Name 'redirections.xml' -Status 'skipped' -Detail 'RedirXMLSourceFolder is not set in the export' -Source 'registry'
+    }
+    Add-CollectorStatus -Name 'App Masking rules'     -Status 'skipped' -Detail $notInExport -Source 'FSLogix\Apps\Rules'
+    Add-CollectorStatus -Name 'Group Policy files'    -Status 'skipped' -Detail $notInExport -Source 'GroupPolicy'
+    Add-CollectorStatus -Name 'Path reachability'     -Status 'skipped' -Detail $notInExport -Source 'profile paths'
+    Add-CollectorStatus -Name 'Applied GPO list'      -Status 'skipped' -Detail $notInExport -Source 'gpresult.exe'
+
+    return [pscustomobject] [ordered]@{
+        schema          = $script:SchemaVersion
+        toolVersion     = $script:ToolVersion
+        capturedAt      = $newest.ToString('yyyy-MM-dd HH:mm:ss zzz')
+        computerName    = $null
+        runAs           = $null
+        elevated        = $null
+        os              = $null
+        join            = $null
+        fslogixVersion  = $null
+        services        = @()
+        keys            = $keys
+        groups          = @()
+        redirections    = $null
+        appMaskingRules = @()
+        policyEvidence  = @()
+        policyScan      = $null
+        pathTests       = @()
+        gpResult        = $null
+        collectors      = $script:Collectors
+        source          = [pscustomobject] [ordered]@{ kind = 'reg'; files = $files; liveSessions = $sessions }
+    }
+}
+
+# --------------------------------------------------------------------------------------
 # Model: capture + catalogue -> rows and paste blocks
 # --------------------------------------------------------------------------------------
 function Format-AdvancedLine {
@@ -1138,7 +1427,10 @@ function Build-Model {
     $valueCount = 0
     foreach ($a in $areas) { $valueCount += @($a.rows).Count }
 
-    if (-not $Capture.fslogixVersion) {
+    # "No agent" is a statement about the host. When the version was never looked for -- a
+    # registry export, a hand-built capture -- it is no statement at all.
+    $agentStatus = Get-CollectorStatus $Capture 'FSLogix agent version'
+    if (-not $Capture.fslogixVersion -and $agentStatus -ne 'skipped') {
         if ($valueCount -eq 0) {
             $findings += [pscustomobject] @{
                 severity = 'info'
@@ -1155,6 +1447,46 @@ function Build-Model {
         }
     }
 
+    if (Test-FromRegExport $Capture) {
+        $src     = Get-Prop $Capture 'source'
+        $files   = (ConvertTo-Array (Get-Prop $src 'files')) -join ', '
+        $skipped  = @(ConvertTo-Array (Get-Prop $Capture 'collectors') | Where-Object { $_.status -eq 'skipped' })
+        $skipKeys = @($skipped | Where-Object { ([string] $_.name) -like 'Registry *' }).Count
+        $skipRest = @($skipped | Where-Object { ([string] $_.name) -notlike 'Registry *' } | ForEach-Object { $_.name })
+        $missing  = @()
+        if ($skipKeys -gt 0) { $missing += ('{0} of the {1} FSLogix registry keys (listed under Coverage)' -f $skipKeys, ($script:Areas.Count * 2)) }
+        $missing += $skipRest
+        $findings += [pscustomobject] @{
+            severity = 'info'
+            rank     = 0
+            title    = 'Built from a registry export'
+            body     = ('Read from {0}. An export carries the FSLogix registry settings and nothing around them, so these were not looked at and are unknown here, not absent: {1}. Running the script on the host fills them in.' -f $files, ($missing -join ', '))
+        }
+        if ($valueCount -eq 0) {
+            $findings += [pscustomobject] @{
+                severity = 'warn'
+                rank     = 0
+                title    = 'The export holds no FSLogix settings'
+                body     = 'None of HKLM\SOFTWARE\FSLogix\{Profiles, ODFC, Apps, Logging} or their Policies keys has values in it. Ask for an export of HKEY_LOCAL_MACHINE\SOFTWARE\FSLogix -- and of HKEY_LOCAL_MACHINE\SOFTWARE\Policies\FSLogix, if that key exists.'
+            }
+        }
+        $live = [int] (Get-Prop $src 'liveSessions' 0)
+        if ($live -gt 0) {
+            $findings += [pscustomobject] @{
+                severity = 'info'
+                title    = 'FSLogix was running when this was exported'
+                body     = ('The export carries {0} live session entr{1} under Sessions, so the agent is installed and was attaching containers on the source host. Those entries are runtime state, with user names and container paths, not configuration -- they are left out of this report.' -f $live, $(if ($live -eq 1) { 'y' } else { 'ies' }))
+            }
+        }
+        if ((Get-CollectorStatus $Capture 'Registry HKLM\SOFTWARE\Policies\FSLogix\Profiles (policy)') -eq 'skipped') {
+            $findings += [pscustomobject] @{
+                severity = 'warn'
+                title    = 'Group Policy could not be checked'
+                body     = 'The export does not include HKLM\SOFTWARE\Policies\FSLogix. If that key exists on the host, a GPO or Intune policy sets FSLogix values and will overwrite what Nerdio Manager writes after every policy refresh. Ask for an export of it too: reg export "HKLM\SOFTWARE\Policies\FSLogix" policies.reg -- "unable to find the specified registry key" means it does not exist, which is the answer you want.'
+            }
+        }
+    }
+
     return [pscustomobject] @{ areas = $areas; findings = $findings }
 }
 
@@ -1167,12 +1499,14 @@ function New-HtmlReport {
     $sb = New-Object System.Text.StringBuilder
     function Add-Line([string] $s) { [void] $sb.AppendLine($s) }
 
+    $fromReg = Test-FromRegExport $Capture
+    $regFiles = (ConvertTo-Array (Get-Prop (Get-Prop $Capture 'source') 'files')) -join ', '
     $host_   = Protect-Html ([string] $Capture.computerName)
     $when    = Protect-Html ([string] $Capture.capturedAt)
     $version = [string] $Capture.fslogixVersion
     $os      = [string] $Capture.os
 
-    $joinText = 'unknown'
+    $joinText = 'join state unknown'
     $join = $Capture.join
     if ($join) {
         if ((Get-Prop $join 'domainJoined') -and (Get-Prop $join 'entraJoined')) { $joinText = 'Entra ID hybrid joined' }
@@ -1195,7 +1529,9 @@ function New-HtmlReport {
     Add-Line '<!doctype html>'
     Add-Line '<html lang="en"><head><meta charset="utf-8">'
     Add-Line '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    Add-Line ('<title>FSLogix to Nerdio - {0}</title>' -f $host_)
+    $titleName = $host_
+    if (-not $titleName -and $fromReg) { $titleName = Protect-Html $regFiles }
+    Add-Line ('<title>FSLogix to Nerdio - {0}</title>' -f $titleName)
     Add-Line @'
 <style>
 :root{
@@ -1272,11 +1608,17 @@ a{color:var(--accent)}
 
     # --- header -------------------------------------------------------------------------
     Add-Line '<header>'
-    Add-Line ('<h1>FSLogix configuration of <code>{0}</code></h1>' -f $host_)
-    $subParts = @("captured $when")
-    if ($version) { $subParts += ('FSLogix ' + (Protect-Html $version)) } else { $subParts += 'no FSLogix agent found' }
+    if ($host_ -or -not $fromReg) {
+        Add-Line ('<h1>FSLogix configuration of <code>{0}</code></h1>' -f $host_)
+    } else {
+        Add-Line ('<h1>FSLogix configuration from <code>{0}</code></h1>' -f (Protect-Html $regFiles))
+    }
+    if ($fromReg) { $subParts = @("registry export, file dated $when") } else { $subParts = @("captured $when") }
+    if ($version) { $subParts += ('FSLogix ' + (Protect-Html $version)) }
+    elseif ((Get-CollectorStatus $Capture 'FSLogix agent version') -eq 'skipped') { $subParts += 'agent version not collected' }
+    else { $subParts += 'no FSLogix agent found' }
     if ($os)      { $subParts += (Protect-Html $os) }
-    $subParts += $joinText
+    if (-not ($fromReg -and -not $join)) { $subParts += $joinText }
     $runAs = [string] (Get-Prop $Capture 'runAs')
     $elev  = Get-Prop $Capture 'elevated'
     if ($runAs) {
@@ -1413,7 +1755,12 @@ a{color:var(--accent)}
     } else {
         $denied = @($collectors | Where-Object { $_.status -eq 'denied' -or $_.status -eq 'error' }).Count
         Add-Line '<div class="card">'
-        if ($denied -eq 0) {
+        $skippedCount = @($collectors | Where-Object { $_.status -eq 'skipped' }).Count
+        if ($fromReg) {
+            Add-Line ('<p class="lead"><b>This report was built from a registry export, so {0} of {1} collectors did not run.</b> Rows marked <i>skipped</i> were not looked at -- treat them as unknown, not as absent.</p>' -f $skippedCount, $collectors.Count)
+        } elseif ($denied -eq 0 -and $skippedCount -gt 0) {
+            Add-Line '<p class="lead">Every collector that ran either read its source or found nothing there. Where this report says a setting is absent, it is absent -- not merely out of reach. Rows marked <i>skipped</i> did not run and say nothing either way.</p>'
+        } elseif ($denied -eq 0) {
             Add-Line '<p class="lead">Every collector either read its source or found nothing there. Where this report says a setting is absent, it is absent -- not merely out of reach.</p>'
         } else {
             Add-Line ('<p class="lead"><b>{0} of {1} collectors came back empty-handed for lack of access.</b> What they would have shown is unknown, not absent; the findings name each one.</p>' -f $denied, $collectors.Count)
@@ -1438,7 +1785,9 @@ a{color:var(--accent)}
     $groups     = @($allGroups | Where-Object { Get-Prop $_ 'exists' })
     $unreadable = @($allGroups | Where-Object { Get-Prop $_ 'error' })
     Add-Line '<div class="card"><h3 style="margin-top:0">FSLogix local groups</h3>'
-    if ($groups.Count -eq 0 -and $unreadable.Count -eq 0) {
+    if ($groups.Count -eq 0 -and $unreadable.Count -eq 0 -and (Get-CollectorStatus $Capture 'FSLogix local groups') -eq 'skipped') {
+        Add-Line '<p class="lead">Not collected. Check <i>FSLogix Profile Include List</i> and <i>Exclude List</i> on the host: if the include list is narrower than Everyone, Nerdio Manager will not reproduce that on its own, and the containers would apply to everyone.</p>'
+    } elseif ($groups.Count -eq 0 -and $unreadable.Count -eq 0) {
         Add-Line '<p class="lead">None of the four FSLogix groups exist on this host. FSLogix creates them when it is installed, and without an include list the containers would apply to everyone.</p>'
     } elseif ($groups.Count -eq 0) {
         Add-Line '<p class="lead">The groups could not be read on this host, so who the containers apply to is unknown. That is not the same as "applies to everyone" &mdash; see the findings.</p>'
@@ -1536,7 +1885,23 @@ if ($CatalogPath) {
     Write-Verbose ("Catalogue overridden from {0}" -f $CatalogPath)
 }
 
-if ($FromJson) {
+if ($FromJson -and $FromReg) { throw 'Use either -FromJson or -FromReg, not both.' }
+
+if ($FromReg) {
+    # "pwsh -File ... -FromReg a.reg,b.reg" from bash or cmd arrives as one string, not an
+    # array. Split it -- unless a file really is called that.
+    $FromReg = @(foreach ($f in $FromReg) {
+        if ((Test-Path -LiteralPath $f) -or $f -notlike '*,*') { $f } else { $f.Split(',') | Where-Object { $_ } }
+    })
+    if ($TestPaths -or $IncludeGpResult) {
+        Write-Warning '-TestPaths and -IncludeGpResult need the host itself; they are ignored with -FromReg.'
+    }
+    Write-Host 'Reading the registry export...'
+    $capture = Get-CaptureFromReg -Path $FromReg
+    $n = 0
+    foreach ($k in $capture.keys) { $n += @($k.values).Count }
+    Write-Host ('Found {0} FSLogix value(s) in {1} file(s).' -f $n, @($FromReg).Count)
+} elseif ($FromJson) {
     if (-not (Test-Path -LiteralPath $FromJson)) { throw "Capture file not found: $FromJson" }
     $capture = Get-Content -LiteralPath $FromJson -Raw | ConvertFrom-Json
     if ($capture.schema -ne $script:SchemaVersion) {
@@ -1574,6 +1939,7 @@ $html  = New-HtmlReport -Capture $capture -Model $model
 if (-not $OutputPath) {
     $stamp = (Get-Date).ToString('yyyyMMdd-HHmm')
     $name  = [string] $capture.computerName
+    if (-not $name -and $FromReg) { $name = [System.IO.Path]::GetFileNameWithoutExtension(@($FromReg)[0]) }
     if (-not $name) { $name = 'host' }
     $OutputPath = Join-Path (Get-Location).Path ('fslogix-nerdio-{0}-{1}.html' -f $name, $stamp)
 }
